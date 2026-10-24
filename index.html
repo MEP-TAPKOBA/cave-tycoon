@@ -13,6 +13,7 @@
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 html,body{height:100%}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 body{margin:0;background:#140D09;color:var(--ink);font:500 15px/1.3 'Rubik',system-ui,sans-serif;font-variant-numeric:tabular-nums;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;overflow:hidden;display:flex;justify-content:center;align-items:center}
 button{font-family:inherit;cursor:pointer}
 img{display:block}
@@ -25,9 +26,8 @@ canvas{position:absolute;left:0;top:0;width:100%;height:calc(100% - var(--nav));
 .hudtext{flex:1;min-width:0}
 .sub{display:flex;gap:6px;font-size:11px;font-weight:600;color:var(--muted);white-space:nowrap;overflow:hidden}
 .sub #cap{flex:none}
-.sub #rate{overflow:hidden;text-overflow:ellipsis}
-.fx{height:14px;font-size:11px;font-weight:700;color:var(--orange-d);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#counter.scared .fx{color:var(--red)}
+.rate{height:14px;margin-top:2px;font-size:11px;font-weight:700;color:var(--orange-d);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#counter.scared .rate{color:var(--red)}
 .shells span{width:3ch;text-align:center}
 #counter>img{width:34px;height:34px;flex:none}
 #meat{display:inline-block;font-size:22px;font-weight:800;line-height:1.1;font-variant-numeric:tabular-nums;transform-origin:left center}
@@ -133,6 +133,7 @@ h2{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;
 .shells{display:flex;align-items:center;gap:4px;padding:6px 10px 6px 6px!important;font-weight:800;font-size:15px;color:var(--ink)}
 .active{position:absolute;left:0;right:0;top:calc(100% + 6px);display:flex;flex-wrap:wrap;gap:6px}
 .active:empty{display:none}
+.active span.warn{color:var(--red)}
 .active span{display:flex;align-items:center;gap:3px;background:var(--card);border-radius:8px;padding:2px 7px 2px 3px;font-size:12px;font-weight:700;box-shadow:0 2px 0 var(--line)}
 .active img{width:16px;height:16px}
 .price{display:flex;align-items:center;justify-content:center;gap:4px}
@@ -160,13 +161,14 @@ h2{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;
   <div id="hud">
     <div id="counter">
       <img src="assets/twemoji/1f356.svg" alt="">
-      <div class="hudtext"><b id="meat">0</b><div class="sub"><span id="cap"></span><span id="rate"></span></div><div class="heat"><i id="heatBar"></i></div><div id="fx" class="fx"></div><div id="active" class="active"></div></div>
+      <div class="hudtext"><b id="meat">0</b><div class="sub"><span id="cap"></span></div><div class="heat"><i id="heatBar"></i></div><div id="rate" class="rate"></div></div>
     </div>
     <div class="tools">
       <button id="shells" class="round shells" aria-label="Лавка шамана"><img src="assets/twemoji/1f41a.svg" alt=""><span id="shellCount">0</span></button>
       <button id="music" class="round" aria-label="Музыка"><img src="assets/twemoji/1f941.svg" alt=""></button>
       <button id="mute" class="round" aria-label="Звуки"><img id="muteIcon" src="assets/twemoji/1f50a.svg" alt=""></button>
     </div>
+    <div id="active" class="active"></div>
   </div>
   <button id="hunt"><img src="assets/twemoji/1f446.svg" alt=""><span id="huntText">Охотиться</span></button>
   <div id="coach" hidden><img src="assets/twemoji/1f5ff.svg" alt=""><div><p id="coachText"></p><div class="coach-btns"><button id="coachOk" hidden></button><button id="coachSkip">Пропустить обучение</button></div></div></div>
@@ -215,6 +217,7 @@ h2{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;
 /** @typedef {{xf:number,yf:number,tx:number,ty:number,dir:number,step:number,moving:boolean,wait:number,inside:boolean,look:Look}} Kid */
 /** @typedef {{xf:number,yf:number,tx:number,ty:number,dx:number,delay:number,step:number,dir:number,throws:number,cool:number,color:string,moving:boolean}} Hunter */
 /** @typedef {{xf:number,yf:number,x1:number,y1:number,t:number}} Spear */
+/** @typedef {{y:number,draw:() => void}} Depth */
 /** @typedef {{xf:number,lane:number,fleeing:boolean,step:number,caught?:boolean,phase?:string,fall?:number,lift?:number,stuck?:number,crew?:Hunter[],spears?:Spear[]}} Mammoth */
 /** @typedef {{kind:'dot'|'smoke'|'fly'|'text',x:number,y:number,vx:number,vy:number,life:number,max:number,size:number,color:string,grav?:number,text?:string,delay?:number,speed?:number}} Particle */
 /** @typedef {{def:Def,el:HTMLElement,btn:HTMLButtonElement,drop:HTMLButtonElement,level:HTMLElement,info:HTMLElement,prog:HTMLElement,x2:HTMLElement,pbar:HTMLElement,eat:HTMLElement|null,html:string}} Row */
@@ -1007,12 +1010,11 @@ function kidsTick(dt) {
   }
 }
 
-/** @param {number} t */
-function drawKids(t) {
-  kids.forEach((k, i) => {
-    if (k.inside) return;
-    const hop = k.moving ? 0 : Math.max(0, Math.sin(t * 5 + i * 2)) * 3 * U;
-    drawPerson(k.xf * W, k.yf * H - hop, U * .55, k.dir, k.step, k.moving, k.look);
+/** @param {number} t @returns {Depth[]} */
+function kidsDepth(t) {
+  return kids.filter(k => !k.inside).map(k => {
+    const i = kids.indexOf(k), hop = k.moving ? 0 : Math.max(0, Math.sin(t * 5 + i * 2)) * 3 * U;
+    return {y: k.yf * H, draw: () => drawPerson(k.xf * W, k.yf * H - hop, U * .55, k.dir, k.step, k.moving, k.look)};
   });
 }
 
@@ -1780,9 +1782,12 @@ function drawStations(night, t) {
 /** @param {Walker} w */
 function drawWalker(w) {
   if (w.wait > 0 && w.xf <= CAVE) return;
-  const k = Math.min(1, (w.xf - CAVE) / .1), y = H * (.75 + (w.lane - .75) * k), s = U * (.75 + (w.lane - .76) * 1.6);
-  drawPerson(w.xf * W, y, s, w.dir, w.step, w.wait <= 0, {color: w.def.color, carry: w.carry, spear: !w.carry, hat: w.def.id});
+  const s = U * (.75 + (w.lane - .76) * 1.6);
+  drawPerson(w.xf * W, walkerY(w), s, w.dir, w.step, w.wait <= 0, {color: w.def.color, carry: w.carry, spear: !w.carry, hat: w.def.id});
 }
+
+/** @param {Walker} w @returns {number} */
+const walkerY = w => H * (.75 + (w.lane - .75) * Math.min(1, (w.xf - CAVE) / .1));
 
 /** @param {number} x @param {number} y @param {number} s @param {number} dir @param {number} step @param {boolean} moving @param {Look} look */
 function drawPerson(x, y, s, dir, step, moving, look) {
@@ -1946,8 +1951,10 @@ const FOLK = [
 const folkBorn = {};
 let folkReady = false;
 
-/** @param {number} t @param {boolean} farm */
-function drawFolk(t, farm) {
+/** @param {number} t @param {boolean} farm @returns {Depth[]} */
+function folkDepth(t, farm) {
+  /** @type {Depth[]} */
+  const out = [];
   FOLK.forEach((f, i) => {
     if (Boolean(f.farm) !== farm) return;
     if (!lvl(f.id)) {
@@ -1958,9 +1965,10 @@ function drawFolk(t, farm) {
     const p = Math.min(1, (t - folkBorn[f.id]) / .4), pop = 1 + 2.7 * (p - 1) ** 3 + 1.7 * (p - 1) ** 2;
     if (pop < .05) return;
     const [x, y] = f.at();
-    drawPerson(x, y - Math.abs(Math.sin(t * 1.6 + i)) * U, U * .78 * pop, Math.sin(t * .25 + i * 2) > 0 ? 1 : -1, 0, false, f.look);
+    out.push({y, draw: () => drawPerson(x, y - Math.abs(Math.sin(t * 1.6 + i)) * U, U * .78 * pop, Math.sin(t * .25 + i * 2) > 0 ? 1 : -1, 0, false, f.look)});
   });
   if (!farm) folkReady = true;
+  return out;
 }
 
 /** @param {number} xf @returns {number} */
@@ -2118,7 +2126,7 @@ function drawFarm(t) {
   }
   hits.push({id: 'barn', x: (b.px0 + b.px1) / 2, y: (b.y0 + b.y1) / 2, r: (b.px1 - b.px0) / 2});
   fence(b.px0, b.px1, b.y0 + 4 * U, b.y1);
-  drawFolk(t, true);
+  for (const d of folkDepth(t, true)) d.draw();
 }
 
 /** @param {number} t */
@@ -2165,11 +2173,10 @@ function draw(t) {
   for (let i = 0; i < 5; i++) sprite(tree, W * (.87 + i * .04), H * .61, 34 * U);
   drawCave(night, t);
   drawStations(night, t);
-  drawFolk(t, false);
-  if (mammoth) drawMammoth(t);
-  if (tiger) drawTiger(t);
-  walkers.forEach(drawWalker);
-  drawKids(t);
+  const depth = [...folkDepth(t, false), ...walkers.map(w => ({y: walkerY(w), draw: () => drawWalker(w)})), ...kidsDepth(t)];
+  if (mammoth) depth.push({y: mammoth.lane * H, draw: () => drawMammoth(t)});
+  if (tiger) depth.push({y: tiger.lane * H, draw: () => drawTiger(t)});
+  for (const d of depth.sort((a, b) => a.y - b.y)) d.draw();
   for (let i = 0; i < 4; i++) sprite(tree, W * (.87 + i * .055), H * (1.04 - (i % 2) * .06), 66 * U);
   drawFarm(t);
   for (const p of particles) {
@@ -2317,10 +2324,8 @@ function renderList() {
     state.injured = {};
     banner('Племя оправилось от страха', '1fa79');
   }
-  const left = Math.max(0, Math.ceil((state.scaredUntil - Date.now()) / 1000));
   setText($('rate'), `${num(perSec())}/с`);
-  setText($('fx'), [left ? `страх −80% ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}` : '', heat >= 1 ? `жар +${pct(heat * .003)}%` : '', state.valley ? `предки +${pct(legacy() - 1)}%` : ''].filter(Boolean).join(' · '));
-  $('counter').classList.toggle('scared', left > 0);
+  $('counter').classList.toggle('scared', isScared());
   $('heatBar').style.width = `${heat}%`;
   setText($('techCount'), `${state.techs.length} из ${TECHS.length}`);
   $('allTechs').hidden = state.techs.length < TECHS.length;
@@ -2712,7 +2717,14 @@ function renderExtras() {
     setText(r.left, r.it.id === 'bless' && owned ? `до ${dayMonth.format(state.blessUntil)}` : owned ? 'есть' : '');
     r.btn.disabled = owned || paying;
   }
-  const chips = BOOSTS.filter(b => boostOn(b.id)).map(b => `<span><img src="${icon(b.icon)}" alt="">${clock(state.boosts[b.id] - now)}</span>`).join('');
+  /** @type {[string, string, string][]} */
+  const fx = [];
+  if (isScared()) fx.push(['1f631', `−80% ${clock(state.scaredUntil - now)}`, ' class="warn"']);
+  if (heat >= 1) fx.push(['1f525', `+${pct(heat * .003)}%`, '']);
+  if (state.valley) fx.push(['1f5ff', `+${pct(legacy() - 1)}%`, '']);
+  if (blessed()) fx.push(['1f9d9', `+${pct(BLESS_BOOST - 1)}%`, '']);
+  for (const b of BOOSTS) if (boostOn(b.id)) fx.push([b.icon, clock(state.boosts[b.id] - now), '']);
+  const chips = fx.map(([code, text, cls]) => `<span${cls}><img src="${icon(code)}" alt="">${text}</span>`).join('');
   if ($('active').innerHTML !== chips) $('active').innerHTML = chips;
   const total = ACHS.reduce((sum, a) => sum + a.goals.length, 0), got = ACHS.reduce((sum, a) => sum + tierOf(a), 0);
   setText($('achCount'), `${got} из ${total}`);
