@@ -9,17 +9,17 @@
 <style>
 @font-face{font-family:'Rubik';font-weight:300 900;font-display:swap;src:url(assets/fonts/rubik-cyrillic.woff2) format('woff2');unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116}
 @font-face{font-family:'Rubik';font-weight:300 900;font-display:swap;src:url(assets/fonts/rubik-latin.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
-:root{--bg:#2E1F17;--card:#FFF4DF;--card2:#FFE7B8;--ink:#3B2A1E;--muted:#8A7360;--line:#E3CDA4;--green:#77B255;--green-d:#5C913B;--orange:#F4900C;--orange-d:#C46F00;--red:#DD2E44;--gold:#FFCC4D;--gold-d:#FFAC33;--off:#E6D8BE;--off-ink:#A8957C;--off-d:#CDBA98;--head:#FFE8C2;--nav:72px;--base-w:390;--base-h:844}
+:root{--bg:#2E1F17;--card:#FFF4DF;--card2:#FFE7B8;--ink:#3B2A1E;--muted:#8A7360;--line:#E3CDA4;--green:#77B255;--green-d:#5C913B;--orange:#F4900C;--orange-d:#C46F00;--red:#DD2E44;--gold:#FFCC4D;--gold-d:#FFAC33;--off:#E6D8BE;--off-ink:#A8957C;--off-d:#CDBA98;--head:#FFE8C2;--base-w:390;--base-h:844}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 html,body{height:100%}
 body{margin:0;background:#140D09;color:var(--ink);font:500 15px/1.3 'Rubik',system-ui,sans-serif;font-variant-numeric:tabular-nums;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;overflow:hidden;display:flex;justify-content:center;align-items:center}
 button{font-family:inherit;cursor:pointer}
 img{display:block}
-#app{position:relative;flex:none;width:calc(100vw / var(--k,1));height:calc(100dvh / var(--k,1));transform:scale(var(--k,1));background:var(--bg);overflow:hidden}
+#app{--safe-top:calc(max(env(safe-area-inset-top,0px),var(--tg-safe-area-inset-top,0px) + var(--tg-content-safe-area-inset-top,0px)) / var(--k,1));--safe-bottom:calc(max(env(safe-area-inset-bottom,0px),var(--tg-safe-area-inset-bottom,0px) + var(--tg-content-safe-area-inset-bottom,0px)) / var(--k,1));--nav:calc(72px + var(--safe-bottom));position:relative;flex:none;width:calc(100vw / var(--k,1));height:calc(100dvh / var(--k,1));transform:scale(var(--k,1));background:var(--bg);overflow:hidden}
 @media (min-width:600px){#app{width:calc(var(--base-w) * 1px);height:calc(var(--base-h) * 1px);border-radius:28px;box-shadow:0 0 0 8px #241812,0 20px 60px rgba(0,0,0,.6)}}
 canvas{position:absolute;left:0;top:0;width:100%;height:calc(100% - var(--nav));display:block;touch-action:manipulation}
-#hud{position:absolute;left:10px;top:10px;right:10px;display:flex;justify-content:space-between;align-items:flex-start;gap:8px;pointer-events:none;z-index:2}
+#hud{position:absolute;left:10px;top:calc(10px + var(--safe-top));right:10px;display:flex;justify-content:space-between;align-items:flex-start;gap:8px;pointer-events:none;z-index:2}
 #counter{position:relative;flex:1;background:var(--card);padding:6px 12px 6px 6px;border-radius:16px;display:flex;align-items:center;gap:8px;box-shadow:0 3px 0 var(--line);min-width:0}
 .tools{flex:none}
 .hudtext{flex:1;min-width:0}
@@ -44,7 +44,7 @@ canvas{position:absolute;left:0;top:0;width:100%;height:calc(100% - var(--nav));
 #hunt img{width:26px;height:26px;flex:none}
 #huntText{overflow:hidden;text-overflow:ellipsis}
 #hunt:active{transform:translate(-50%,4px);box-shadow:0 1px 0 var(--orange-d)}
-#nav{position:absolute;left:0;right:0;bottom:0;height:var(--nav);display:flex;background:var(--card);border-radius:20px 20px 0 0;box-shadow:0 -3px 0 var(--line);z-index:4;padding:6px 4px 8px}
+#nav{position:absolute;left:0;right:0;bottom:0;height:var(--nav);display:flex;background:var(--card);border-radius:20px 20px 0 0;box-shadow:0 -3px 0 var(--line);z-index:4;padding:6px 4px calc(8px + var(--safe-bottom))}
 #nav button{flex:1;position:relative;border:0;background:none;border-radius:14px;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:11px;font-weight:700;color:var(--muted);padding:4px 0}
 #nav button img{width:30px;height:30px;transition:transform .15s}
 #nav button.on{background:var(--card2);color:var(--ink)}
@@ -107,7 +107,7 @@ h2{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;
 @keyframes pulse{50%{transform:scale(1.03);filter:brightness(1.12)}}
 #reset{display:block;margin:16px auto 0;background:none;border:0;color:var(--head);opacity:.7;text-decoration:underline;font-size:14px}
 #credit{text-align:center;color:var(--head);opacity:.45;font-size:11px;margin-top:10px}
-#banner{position:absolute;left:50%;top:14px;transform:translate(-50%,-180%);width:min(340px,94%);display:flex;align-items:center;justify-content:center;gap:8px;background:var(--gold);color:var(--ink);font-weight:800;font-size:15px;padding:9px 16px 9px 10px;border-radius:16px;box-shadow:0 4px 0 var(--gold-d),0 10px 24px rgba(0,0,0,.35);transition:transform .4s cubic-bezier(.2,1.5,.4,1);z-index:6;max-width:94%}
+#banner{position:absolute;left:50%;top:calc(14px + var(--safe-top));transform:translate(-50%,calc(-100% - 40px - var(--safe-top)));width:min(340px,94%);display:flex;align-items:center;justify-content:center;gap:8px;background:var(--gold);color:var(--ink);font-weight:800;font-size:15px;padding:9px 16px 9px 10px;border-radius:16px;box-shadow:0 4px 0 var(--gold-d),0 10px 24px rgba(0,0,0,.35);transition:transform .4s cubic-bezier(.2,1.5,.4,1);z-index:6;max-width:94%}
 #banner img{width:26px;height:26px;flex:none}
 #banner span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #banner.show{transform:translate(-50%,0)}
@@ -120,7 +120,7 @@ h2{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;
 #mOk:active{transform:translateY(4px);box-shadow:0 1px 0 var(--orange-d)}
 #mNo{margin-top:10px;background:none;border:0;color:var(--muted);font-size:15px;padding:8px}
 @keyframes pop{from{transform:scale(.6);opacity:0}}
-#coach{position:absolute;left:10px;right:10px;top:78px;z-index:5;display:flex;gap:10px;align-items:flex-start;background:var(--card);border-radius:18px;padding:10px 12px;box-shadow:0 4px 0 var(--line),0 10px 24px rgba(0,0,0,.3);animation:pop .35s cubic-bezier(.2,1.5,.4,1)}
+#coach{position:absolute;left:10px;right:10px;top:calc(78px + var(--safe-top));z-index:5;display:flex;gap:10px;align-items:flex-start;background:var(--card);border-radius:18px;padding:10px 12px;box-shadow:0 4px 0 var(--line),0 10px 24px rgba(0,0,0,.3);animation:pop .35s cubic-bezier(.2,1.5,.4,1)}
 #coach>img{width:44px;height:44px;flex:none}
 #coach p{margin:0 0 6px;min-height:calc(3 * 1.35em);font-weight:600;font-size:14px;line-height:1.35}
 .coach-btns{display:flex;gap:12px;align-items:center}
@@ -149,7 +149,7 @@ h2{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;
 .story-card p{margin:0;font-size:16px;line-height:1.5;font-weight:500;max-width:320px}
 #storyNext{min-width:180px;margin-top:8px;padding:12px 34px;font-size:18px;font-weight:800;border:0;border-radius:16px;background:var(--orange);color:#fff;box-shadow:0 5px 0 var(--orange-d)}
 #storyNext:active{transform:translateY(4px);box-shadow:0 1px 0 var(--orange-d)}
-#tutAgain{display:block;margin:12px auto 0;background:none;border:0;color:var(--head);opacity:.7;text-decoration:underline;font-size:14px}
+#tutAgain,#buzz{display:block;margin:12px auto 0;background:none;border:0;color:var(--head);opacity:.7;text-decoration:underline;font-size:14px}
 #fade{position:absolute;inset:0;background:#000;opacity:0;pointer-events:none;transition:opacity .8s;z-index:8}
 #fade.show{opacity:1}
 </style>
@@ -181,6 +181,7 @@ h2{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;
         <h2>Достижения <span id="achCount"></span></h2>
         <section id="achs"></section>
         <button id="tutAgain">Пройти обучение заново</button>
+        <button id="buzz" hidden></button>
         <button id="reset">Начать заново</button>
         <div id="credit">Графика: Twemoji, CC-BY 4.0</div>
       </div>
@@ -207,7 +208,7 @@ h2{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;
 /** @typedef {{id:string,name:string,icon:string,base:number,growth:number,stat:() => number,unit:string,pct?:boolean,tech?:string,trip?:number,time?:number,color?:string,feed?:number,meat?:number,from?:string}} Def */
 /** @typedef {{def:Def,xf:number,yf:number,vx:number,step:number}} Critter */
 /** @typedef {{id:string,name:string,icon:string,desc:string,cost:number,need:[string,number]}} Tech */
-/** @typedef {{meat:number,levels:Record<string,number>,savedAt:number,muted:boolean,valley:number,stage:number,earned:number,taps:number,mammoths:number,tigers:number,techs:string[],scaredUntil:number,injured:Record<string,number>,grain:number,harvest:number,perks:string[],mammothRest:number,music:boolean,tut:number,peakHeat:number,noTut:boolean,shells:number,boosts:Record<string,number>,tiers:Record<string,number>,life:{taps:number,earned:number,mammoths:number,tigers:number,migrations:number},econ:number,blessUntil:number,blessDay:string,restarts:number}} State */
+/** @typedef {{meat:number,levels:Record<string,number>,savedAt:number,muted:boolean,valley:number,stage:number,earned:number,taps:number,mammoths:number,tigers:number,techs:string[],scaredUntil:number,injured:Record<string,number>,grain:number,harvest:number,perks:string[],mammothRest:number,music:boolean,tut:number,peakHeat:number,noTut:boolean,shells:number,boosts:Record<string,number>,tiers:Record<string,number>,life:{taps:number,earned:number,mammoths:number,tigers:number,migrations:number},econ:number,blessUntil:number,blessDay:string,restarts:number,heat:number,noBuzz:boolean}} State */
 /** @typedef {{def:Def,xf:number,lane:number,dir:number,wait:number,carry:boolean,step:number}} Walker */
 /** @typedef {{color:string,carry?:boolean|string,spear?:boolean,raise?:boolean,hat?:string,skin?:string,leg?:string,hair?:string,beard?:boolean,long?:boolean,dress?:boolean,bead?:string,band?:string,scythe?:number}} Look */
 /** @typedef {{phase:string,i:number,xf:number,yf:number,dir:number,step:number,moving:boolean,swing:number,mowing:boolean,cut:boolean[],grow:number,stack:number,carry:boolean,placed:boolean}} Farmer */
@@ -228,6 +229,7 @@ const BLESS_BOOST = 1.25;
 const BLESS_GIFT = 5;
 const HARVEST = 5 * 60;
 const KEEPER_HEAT = 50;
+const AWAY_COOL = .2;
 /** @type {[number, number][]} */
 const CREW = [[-.17, -.03], [-.13, .05], [.15, -.03], [.19, .05], [.01, .08]];
 const CREW_COLORS = ['#A0522D', '#8A6B3F', '#B5533C', '#C1694F', '#9C7A4A'];
@@ -276,6 +278,7 @@ if (inTelegram) {
 
 /** @param {number|number[]} pattern */
 function buzz(pattern) {
+  if (state.noBuzz) return;
   if (!tgAt('6.1')) return void navigator.vibrate?.(pattern);
   if (Array.isArray(pattern)) return void tg.HapticFeedback.notificationOccurred(pattern[0] > 40 ? 'warning' : 'success');
   tg.HapticFeedback.impactOccurred(pattern > 20 ? 'heavy' : pattern > 10 ? 'medium' : 'light');
@@ -381,7 +384,7 @@ const VALLEYS = [
 ];
 
 /** @returns {State} */
-const fresh = () => ({meat: 0, levels: {}, savedAt: Date.now(), muted: false, valley: 0, stage: 0, earned: 0, taps: 0, mammoths: 0, tigers: 0, techs: [], scaredUntil: 0, injured: {}, grain: 0, harvest: HARVEST, perks: [], mammothRest: 0, music: true, tut: 0, peakHeat: 0, noTut: false, shells: 4, boosts: {}, tiers: {}, life: {taps: 0, earned: 0, mammoths: 0, tigers: 0, migrations: 0}, econ: 2, blessUntil: 0, blessDay: '', restarts: 0});
+const fresh = () => ({meat: 0, levels: {}, savedAt: Date.now(), muted: false, valley: 0, stage: 0, earned: 0, taps: 0, mammoths: 0, tigers: 0, techs: [], scaredUntil: 0, injured: {}, grain: 0, harvest: HARVEST, perks: [], mammothRest: 0, music: true, tut: 0, peakHeat: 0, noTut: false, shells: 4, boosts: {}, tiers: {}, life: {taps: 0, earned: 0, mammoths: 0, tigers: 0, migrations: 0}, econ: 2, blessUntil: 0, blessDay: '', restarts: 0, heat: 0, noBuzz: false});
 const TUT_DONE = 99;
 /** @param {string} id @returns {boolean} */
 const boostOn = id => (state.boosts[id] || 0) > Date.now();
@@ -424,6 +427,7 @@ let frozen = false;
 function save() {
   if (frozen) return;
   state.savedAt = Date.now();
+  state.heat = heat;
   const json = JSON.stringify(state);
   try { localStorage.setItem(SAVE_KEY, json); } catch {}
   if (!cloudReady || json.length > CLOUD_MAX || Date.now() - cloudAt < CLOUD_EVERY) return;
@@ -1270,7 +1274,7 @@ function migrate() {
   $('fade').classList.add('show');
   tune([330, 294, 262], 150);
   setTimeout(() => {
-    const keep = {muted: state.muted, music: state.music, noTut: state.noTut, shells: state.shells + shellReward(), boosts: state.boosts, perks: state.perks, mammothRest: state.mammothRest, tiers: state.tiers, blessUntil: state.blessUntil, blessDay: state.blessDay, restarts: state.restarts, life: {...state.life, migrations: state.life.migrations + 1}};
+    const keep = {muted: state.muted, music: state.music, noBuzz: state.noBuzz, noTut: state.noTut, shells: state.shells + shellReward(), boosts: state.boosts, perks: state.perks, mammothRest: state.mammothRest, tiers: state.tiers, blessUntil: state.blessUntil, blessDay: state.blessDay, restarts: state.restarts, life: {...state.life, migrations: state.life.migrations + 1}};
     state = {...fresh(), ...keep, valley: state.valley + 1, tut: state.noTut ? TUT_DONE : 0};
     walkers = [];
     critters = [];
@@ -1714,15 +1718,15 @@ function drawCave(night, t) {
 
 /** @param {number} night @param {number} t */
 function drawStations(night, t) {
-  const f = spotOf('fire'), fl = lvl('fire'), r = (20 + Math.min(fl, 30) * .6) * U * (.45 + heat / 125);
-  glow(f.x, f.y - r / 2, r * 3, (.2 + night * .35) * (.3 + heat / 100));
+  const f = spotOf('fire'), fl = lvl('fire'), lit = heat > 0, r = (20 + Math.min(fl, 30) * .6) * U * (.25 + heat / 100);
+  if (lit) glow(f.x, f.y - r / 2, r * 3, (.2 + night * .35) * (.3 + heat / 100));
   for (let i = 0; i < 5; i++) {
     const a = Math.PI * (.05 + i * .225);
     sprite('rock', f.x + Math.cos(a) * 15 * U, f.y + 3 * U - Math.sin(a) * 2 * U, 9 * U);
   }
   sprite('wood', f.x - 5 * U, f.y + 4 * U, 15 * U, false, -1.25);
   sprite('wood', f.x + 5 * U, f.y + 4 * U, 15 * U, true, 1.25);
-  sprite('fire', f.x, f.y, r * (1 + Math.sin(t * 12) * .06), Math.sin(t * 3) > 0, Math.sin(t * 9) * .04);
+  if (lit) sprite('fire', f.x, f.y, r * (1 + Math.sin(t * 12) * .06), Math.sin(t * 3) > 0, Math.sin(t * 9) * .04);
   if (heat < 25) bubble(f.x - 6 * U, f.y - 40 * U, 'Дров!', t, '#F4900C');
   else if (fl) tag(f.x, f.y - r - 10 * U, `ур. ${fl}`);
   hits.push({id: 'fire', x: f.x, y: f.y - 14 * U, r: 30 * U});
@@ -2336,6 +2340,7 @@ function renderList() {
   setText($('huntText'), `Охотиться +${num(perTap())}`);
   const muteSrc = icon(state.muted ? '1f507' : '1f50a');
   if ($('muteIcon').getAttribute('src') !== muteSrc) $('muteIcon').setAttribute('src', muteSrc);
+  setText($('buzz'), state.noBuzz ? 'Включить вибрацию' : 'Выключить вибрацию');
   for (const r of rows) {
     const n = amount(r.def), c = costOf(r.def, Math.max(n, 1)), l = lvl(r.def.id);
     setText(r.level, l ? (r.def.trip || r.def.feed ? `×${l}` + (hurt(r.def.id) ? `, ранены ${hurt(r.def.id)}` : '') : `ур. ${l}`) : '');
@@ -2364,6 +2369,11 @@ function renderList() {
   }
   renderExtras();
   renderTutorial();
+}
+
+/** @param {number} from @param {number} ms @returns {number} */
+function cooled(from, ms) {
+  return boostOn('feast') ? from : Math.max(0, from - ms / 1000 * AWAY_COOL * (has('flint') ? .5 : 1));
 }
 
 /** @param {number} since */
@@ -2724,6 +2734,7 @@ build(WORKERS, $('workers'));
 build(FARM, $('farm'));
 syncWalkers();
 openSheet('');
+heat = cooled(state.heat, Date.now() - state.savedAt);
 welcomeBack(state.savedAt);
 
 canvas.addEventListener('pointerdown', e => {
@@ -2762,6 +2773,12 @@ $('coachSkip').onclick = () => {
   state.noTut = true;
   renderList();
 };
+$('buzz').hidden = !tgAt('6.1') && !('vibrate' in navigator);
+$('buzz').onclick = () => {
+  state.noBuzz = !state.noBuzz;
+  buzz(15);
+  renderList();
+};
 $('tutAgain').onclick = () => {
   state.noTut = false;
   state.tut = 0;
@@ -2776,7 +2793,7 @@ $('mOk').onclick = () => {
 };
 $('mNo').onclick = () => $('modal').classList.remove('show');
 $('reset').onclick = () => modal('Начать с самой первой долины? Пропадёт всё, включая мудрость предков.', 'Начать заново?', 'Да, заново', () => {
-  state = {...fresh(), muted: state.muted, music: state.music, blessUntil: state.blessUntil, blessDay: state.blessDay, restarts: state.restarts + 1, perks: paidKeeper ? ['keeper'] : []};
+  state = {...fresh(), muted: state.muted, music: state.music, noBuzz: state.noBuzz, blessUntil: state.blessUntil, blessDay: state.blessDay, restarts: state.restarts + 1, perks: paidKeeper ? ['keeper'] : []};
   walkers = [];
   critters = [];
   particles = [];
@@ -2803,7 +2820,7 @@ let hiddenAt = 0;
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) {
     audio?.resume();
-    if (!boostOn('feast')) heat = Math.max(0, heat - (Date.now() - hiddenAt) / 1000 * .35 * (has('flint') ? .5 : 1));
+    if (hiddenAt) heat = cooled(heat, Date.now() - hiddenAt);
     tigerIn = Math.max(tigerIn, 20);
     if (tiger && !tiger.fleeing) tiger.xf = Math.max(tiger.xf, .95);
     blessGift();
