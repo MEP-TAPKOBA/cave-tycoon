@@ -9,15 +9,15 @@
 <style>
 @font-face{font-family:'Rubik';font-weight:300 900;font-display:swap;src:url(assets/fonts/rubik-cyrillic.woff2) format('woff2');unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116}
 @font-face{font-family:'Rubik';font-weight:300 900;font-display:swap;src:url(assets/fonts/rubik-latin.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
-:root{--bg:#2E1F17;--card:#FFF4DF;--card2:#FFE7B8;--ink:#3B2A1E;--muted:#8A7360;--line:#E3CDA4;--green:#77B255;--green-d:#5C913B;--orange:#F4900C;--orange-d:#C46F00;--red:#DD2E44;--gold:#FFCC4D;--gold-d:#FFAC33;--off:#E6D8BE;--off-ink:#A8957C;--off-d:#CDBA98;--head:#FFE8C2;--nav:72px}
+:root{--bg:#2E1F17;--card:#FFF4DF;--card2:#FFE7B8;--ink:#3B2A1E;--muted:#8A7360;--line:#E3CDA4;--green:#77B255;--green-d:#5C913B;--orange:#F4900C;--orange-d:#C46F00;--red:#DD2E44;--gold:#FFCC4D;--gold-d:#FFAC33;--off:#E6D8BE;--off-ink:#A8957C;--off-d:#CDBA98;--head:#FFE8C2;--nav:72px;--base-w:390;--base-h:844}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 html,body{height:100%}
 body{margin:0;background:#140D09;color:var(--ink);font:500 15px/1.3 'Rubik',system-ui,sans-serif;font-variant-numeric:tabular-nums;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;overflow:hidden;display:flex;justify-content:center;align-items:center}
 button{font-family:inherit;cursor:pointer}
 img{display:block}
-#app{position:relative;width:min(100vw,calc(100dvh * 9 / 19.5));height:100dvh;background:var(--bg);overflow:hidden}
-@media (min-width:600px){#app{height:min(100dvh,900px);width:min(100vw,calc(min(100dvh,900px) * 9 / 19.5));border-radius:28px;box-shadow:0 0 0 8px #241812,0 20px 60px rgba(0,0,0,.6)}}
+#app{position:relative;flex:none;width:calc(100vw / var(--k,1));height:calc(100dvh / var(--k,1));transform:scale(var(--k,1));background:var(--bg);overflow:hidden}
+@media (min-width:600px){#app{width:calc(var(--base-w) * 1px);height:calc(var(--base-h) * 1px);border-radius:28px;box-shadow:0 0 0 8px #241812,0 20px 60px rgba(0,0,0,.6)}}
 canvas{position:absolute;left:0;top:0;width:100%;height:calc(100% - var(--nav));display:block;touch-action:manipulation}
 #hud{position:absolute;left:10px;top:10px;right:10px;display:flex;justify-content:space-between;align-items:flex-start;gap:8px;pointer-events:none;z-index:2}
 #counter{position:relative;flex:1;background:var(--card);padding:6px 12px 6px 6px;border-radius:16px;display:flex;align-items:center;gap:8px;box-shadow:0 3px 0 var(--line);min-width:0}
@@ -239,6 +239,7 @@ const MILESTONE = 25;
 const MILESTONE_BOOST = 1.4;
 const SAVE_KEY = 'cave-tycoon';
 const MAX_WALKERS = 8;
+const MAX_FRAME = 900;
 const CAVE = .12;
 const FOREST = .94;
 const TARGET = {x: 30, y: 30};
@@ -806,7 +807,7 @@ function musicTick() {
   band ??= setupBand();
   if (!state.music) return stopDrone();
   startDrone();
-  if (nextStep < audio.currentTime) nextStep = audio.currentTime + .05;
+  if (nextStep <= audio.currentTime) nextStep = audio.currentTime + .05;
   while (nextStep < audio.currentTime + .2) {
     playStep(stepNo, nextStep);
     nextStep += STEP;
@@ -845,8 +846,19 @@ function resize() {
   canvas.height = FH * dpr;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
+const desktop = matchMedia('(min-width:600px)');
+const rootCss = getComputedStyle(document.documentElement);
+const BASE_W = Number(rootCss.getPropertyValue('--base-w'));
+const BASE_H = Number(rootCss.getPropertyValue('--base-h'));
+let uiScale = 1;
+function fit() {
+  uiScale = desktop.matches ? Math.min(innerHeight, MAX_FRAME) / BASE_H : innerWidth / BASE_W;
+  document.documentElement.style.setProperty('--k', String(uiScale));
+  resize();
+}
 new ResizeObserver(resize).observe(canvas);
-resize();
+addEventListener('resize', fit);
+fit();
 
 /** @type {Particle[]} */
 let particles = [];
@@ -2374,13 +2386,13 @@ function welcomeBack(since) {
 function pointAt(el) {
   if (!el) return null;
   const r = el.getBoundingClientRect(), a = $('app').getBoundingClientRect();
-  return r.width ? {x: r.left - a.left + r.width / 2, y: r.top - a.top + r.height / 2} : null;
+  return r.width ? {x: (r.left - a.left + r.width / 2) / uiScale, y: (r.top - a.top + r.height / 2) / uiScale} : null;
 }
 
 /** @param {number} x @param {number} y @returns {{x:number,y:number}} */
 function scenePoint(x, y) {
   const r = canvas.getBoundingClientRect(), a = $('app').getBoundingClientRect();
-  return {x: r.left - a.left + x, y: r.top - a.top + y};
+  return {x: (r.left - a.left + x) / uiScale, y: (r.top - a.top + y) / uiScale};
 }
 
 /** @param {string} sec @returns {Element|null} */
