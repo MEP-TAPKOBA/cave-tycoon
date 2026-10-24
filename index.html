@@ -63,7 +63,7 @@ h2{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;
 .info b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .info small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .info small.eat{color:var(--green-d)}
-.info small.two{white-space:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2}
+.info .full{white-space:normal}
 .info small.from{color:var(--orange-d)}
 .info small.eat.warn{color:var(--red)}
 .info small.need{font-size:11px;color:var(--green-d)}
@@ -2273,7 +2273,7 @@ const questRows = [0, 1, 2].map(() => {
 const techRows = TECHS.map(tech => {
   const el = document.createElement('div');
   el.className = 'item';
-  el.innerHTML = `<div class="ico"><img src="${icon(tech.icon)}" alt=""></div><div class="info"><b>${tech.name}</b><small>${tech.desc}</small><small class="need"></small></div><button class="buy"></button>`;
+  el.innerHTML = `<div class="ico"><img src="${icon(tech.icon)}" alt=""></div><div class="info"><b class="full">${tech.name}</b><small class="full">${tech.desc}</small><small class="need full"></small></div><button class="buy"></button>`;
   const btn = el.querySelector('button');
   btn.onclick = () => buyTech(tech);
   $('techs').append(el);
@@ -2569,7 +2569,7 @@ const STAR_ITEMS = [
   {id: 'shells150', name: 'Мешок ракушек', icon: '1f41a', desc: '150 ракушек для лавки шамана', stars: 200, shells: 150},
   {id: 'shells400', name: 'Сундук ракушек', icon: '1f41a', desc: '400 ракушек для лавки шамана', stars: 500, shells: 400},
   {id: 'keeper', name: 'Хранитель огня', icon: '1fab5', desc: `навсегда: днём жар не ниже ${KEEPER_HEAT}%`, stars: 150},
-  {id: 'bless', name: 'Благословение шамана', icon: '1f9d9', desc: `30 дней: добыча +${pct(BLESS_BOOST - 1)}%, ${BLESS_GIFT} ракушек каждый день, племя копит добычу без тебя 4 часа вместо 2`, stars: 300},
+  {id: 'bless', name: 'Благословение шамана', icon: '1f9d9', desc: `на 30 дней: добыча +${pct(BLESS_BOOST - 1)}%, ${BLESS_GIFT} ракушек каждый день, доход без тебя копится 4 часа вместо 2`, stars: 300},
 ];
 const shopStars = inTelegram && tgAt('6.1') && Boolean(SERVER);
 let paidKeeper = false;
@@ -2659,7 +2659,7 @@ const SHELL_IMG = `<img src="${icon('1f41a')}" alt="">`;
 const boostRows = BOOSTS.map(b => {
   const el = document.createElement('div');
   el.className = 'item';
-  el.innerHTML = `<div class="ico"><img src="${icon(b.icon)}" alt=""></div><div class="info"><b>${b.name}<span></span></b><small>${b.desc}</small></div><button class="buy"><span class="price">${SHELL_IMG}${b.price}</span></button>`;
+  el.innerHTML = `<div class="ico"><img src="${icon(b.icon)}" alt=""></div><div class="info"><b class="full">${b.name}<span></span></b><small class="full">${b.desc}</small></div><button class="buy"><span class="price">${SHELL_IMG}${b.price}</span></button>`;
   const btn = el.querySelector('button');
   btn.onclick = () => buyBoost(b);
   $('boosts').append(el);
@@ -2669,7 +2669,7 @@ const STAR_IMG = `<img src="${icon('2b50')}" alt="">`;
 const starRows = STAR_ITEMS.map(it => {
   const el = document.createElement('div');
   el.className = 'item';
-  el.innerHTML = `<div class="ico"><img src="${icon(it.icon)}" alt=""></div><div class="info"><b>${it.name}<span></span></b><small class="two">${it.desc}</small></div><button class="buy"><span class="price">${STAR_IMG}${it.stars}</span></button>`;
+  el.innerHTML = `<div class="ico"><img src="${icon(it.icon)}" alt=""></div><div class="info"><b class="full">${it.name}<span></span></b><small class="full">${it.desc}</small></div><button class="buy"><span class="price">${STAR_IMG}${it.stars}</span></button>`;
   const btn = el.querySelector('button');
   btn.onclick = () => buyStars(it);
   $('stars').append(el);
@@ -2679,7 +2679,7 @@ const dayMonth = new Intl.DateTimeFormat('ru', {day: 'numeric', month: 'long'});
 const achRows = ACHS.map(a => {
   const el = document.createElement('div');
   el.className = 'item';
-  el.innerHTML = `<div class="ico"><img src="${icon(a.icon)}" alt=""></div><div class="info"><b><em></em><span></span></b><small></small><div class="prog"><i></i></div></div><div class="reward">${SHELL_IMG}<em></em></div>`;
+  el.innerHTML = `<div class="ico"><img src="${icon(a.icon)}" alt=""></div><div class="info"><b class="full"><em></em><span></span></b><small class="full"></small><div class="prog"><i></i></div></div><div class="reward">${SHELL_IMG}<em></em></div>`;
   $('achs').append(el);
   const [name, reward] = el.querySelectorAll('em');
   return {a, el, name, reward, step: el.querySelector('b span'), info: el.querySelector('small'), bar: el.querySelector('.prog i'), prog: el.querySelector('.prog'), side: el.querySelector('.reward')};
@@ -2831,6 +2831,7 @@ setInterval(() => document.hidden || save(), 5000);
 let hiddenAt = 0;
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) {
+    pullCloud();
     audio?.resume();
     if (hiddenAt) heat = cooled(heat, Date.now() - hiddenAt);
     tigerIn = Math.max(tigerIn, 20);
@@ -2843,7 +2844,10 @@ document.addEventListener('visibilitychange', () => {
   saveNow();
 });
 addEventListener('pagehide', saveNow);
-if (tgAt('8.0')) tg.onEvent('deactivated', saveNow);
+if (tgAt('8.0')) {
+  tg.onEvent('deactivated', saveNow);
+  tg.onEvent('activated', pullCloud);
+}
 pullCloud();
 syncStars();
 renderList();
