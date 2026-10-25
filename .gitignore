@@ -1,0 +1,10 @@
+CLAUDE.md
+TELEGRAM.md
+.claude/
+bot/
+cave_manager_upload/
+pdfview.html
+Текстовый документ.txt
+server/.wrangler/
+node_modules/
+server/wrangler.toml
