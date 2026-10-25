@@ -4,6 +4,7 @@ import {TECHS} from '../data/techs.js';
 import {ALL} from '../data/units.js';
 import {herd, lvl, staff} from './formulas.js';
 
+/** @typedef {import('./state.js').State} State */
 /** @typedef {import('./state.js').World} World */
 /** @typedef {{text:string,goal:number,now:number}} Quest */
 
@@ -36,6 +37,13 @@ export function genericGoal(kind, s, g) {
 
 /** @param {World} w @returns {number} */
 export const stageCount = w => CHAPTERS[w.state.valley]?.stages.length ?? GENERIC_STAGES;
+
+/** @param {State} s @returns {number} */
+export function rankScore(s) {
+  let n = s.stage + 2 * s.valley;
+  for (let v = 0; v < s.valley; v++) n += CHAPTERS[v]?.stages.length ?? GENERIC_STAGES;
+  return n;
+}
 
 /** @param {World} w @returns {Quest[]} */
 export function quests(w) {

@@ -215,3 +215,26 @@ test('рассылка: /send не на черновик и чужие кома�
   assert.equal(await say(55, '/all всем привет'), null);
   assert.equal(calls.length, 0);
 });
+
+/** @param {{id:number,first_name:string,photo_url?:string}} user @param {Partial<import('../src/core/state.js').State>} patch @returns {Promise<any>} */
+const saveAs = (user, patch) => worker.fetch(new Request('https://w.test/save', {method: 'POST', body: JSON.stringify({initData: initData(user), save: saveOf(patch)})}), env).then(r => r.json());
+
+test('рейтинг: очки из сейва, порядок, кто раньше набрал - выше, скрытые не видны', async () => {
+  await saveAs({id: 1, first_name: 'Аня', photo_url: 'https://t.me/i/userpic/320/a.jpg'}, {valley: 0, stage: 3});
+  await saveAs({id: 2, first_name: 'Боря', photo_url: 'javascript:alert(1)'}, {valley: 0, stage: 3});
+  await saveAs({id: 3, first_name: 'Вика'}, {valley: 0, stage: 1, noRank: true});
+  await saveAs(USER, {valley: 0, stage: 2});
+  const r = await ask('/top');
+  assert.deepEqual(r.top.map((/** @type {any} */ p) => [p.name, p.score, p.me]), [['Аня', 3, false], ['Боря', 3, false], ['Вождь', 2, true]]);
+  assert.equal(r.top[0].photo, 'https://t.me/i/userpic/320/a.jpg');
+  assert.equal(r.top[1].photo, '');
+  assert.equal(r.place, 3);
+  assert.equal(r.top[0].id, undefined);
+  await saveAs({id: 1, first_name: 'Аня'}, {valley: 0, stage: 3, taps: 5});
+  assert.equal((await ask('/top')).top[0].name, 'Аня');
+  await saveAs(USER, {valley: 0, stage: 2, noRank: true});
+  const hidden = await ask('/top');
+  assert.equal(hidden.place, 0);
+  assert.equal(hidden.hidden, true);
+  assert.equal(hidden.top.length, 2);
+});

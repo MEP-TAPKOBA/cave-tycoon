@@ -1,16 +1,19 @@
 import {SAVE_EPOCH} from '../src/config.js';
 import {STAR_ITEMS} from '../src/data/shop.js';
 import {judge, ledgerOf} from '../src/core/check.js';
+import {rankScore} from '../src/core/quests.js';
 import {ahead, parseSave} from '../src/core/state.js';
 
 /** @typedef {import('../src/data/shop.js').StarItem} StarItem */
 /** @typedef {{item:string,charge:string,stars:number,at:number,given:boolean}} Pay */
-/** @typedef {{id:number,first_name?:string,last_name?:string,username?:string}} User */
+/** @typedef {{id:number,first_name?:string,last_name?:string,username?:string,photo_url?:string}} User */
 /** @typedef {{TOKEN:string,HOOK:string,GAME:string,ADMIN?:string,KV?:any,DB:any}} Env */
 
 const DAY = 24 * 3600;
 const INIT_TTL = 24 * 3600;
 const MAX_SAVE = 64 * 1024;
+const TOP = 50;
+const PHOTO = /^https:\/\/t\.me\/[\w./-]+$/;
 const USER_TAG = /#id(\d+)/;
 
 /** @param {string} id @returns {StarItem|undefined} */
@@ -206,6 +209,14 @@ async function ledger(env, id) {
   return ledgerOf(results, p?.bless_until || 0);
 }
 
+/** @param {Env} env @param {User} user @returns {Promise<Response>} */
+async function top(env, user) {
+  const {results} = await env.DB.prepare('SELECT id, first, photo, score FROM saves WHERE hidden = 0 ORDER BY score DESC, score_at, id LIMIT ?').bind(TOP).all();
+  const me = await env.DB.prepare('SELECT score, score_at, hidden FROM saves WHERE id = ?').bind(user.id).first();
+  const ahead = me && !me.hidden ? await env.DB.prepare('SELECT COUNT(*) AS n FROM saves WHERE hidden = 0 AND (score > ? OR (score = ? AND (score_at < ? OR (score_at = ? AND id < ?))))').bind(me.score, me.score, me.score_at, me.score_at, user.id).first() : null;
+  return Response.json({top: results.map((/** @type {{id:number,first:string,photo:string,score:number}} */ r) => ({name: r.first, photo: r.photo, score: r.score, me: r.id === user.id})), place: ahead ? ahead.n + 1 : 0, score: me?.score ?? 0, hidden: Boolean(me?.hidden)});
+}
+
 /** @param {Env} env @param {User} user @param {unknown} text @returns {Promise<Response>} */
 async function store(env, user, text) {
   const s = typeof text === 'string' && text.length <= MAX_SAVE && text.includes(`"epoch":${SAVE_EPOCH}`) ? parseSave(text) : null;
@@ -216,7 +227,8 @@ async function store(env, user, text) {
   const {verdict, state} = judge(s, prev, row ? now - row.saved_at : 0, await ledger(env, user.id), now);
   if (verdict === 'reject') return Response.json({ok: false, save: row?.data ?? null, savedAt: row?.saved_at ?? now, now});
   const data = verdict === 'fixed' ? JSON.stringify(state) : text;
-  await env.DB.prepare('INSERT INTO saves (id, data, saved_at, name) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET data = excluded.data, saved_at = excluded.saved_at, name = excluded.name').bind(user.id, data, now, nameOf(user)).run();
+  const photo = PHOTO.test(user.photo_url || '') ? user.photo_url : '';
+  await env.DB.prepare('INSERT INTO saves (id, data, saved_at, name, score, score_at, first, photo, hidden) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET data = excluded.data, saved_at = excluded.saved_at, name = excluded.name, score_at = CASE WHEN excluded.score = saves.score THEN saves.score_at ELSE excluded.score_at END, score = excluded.score, first = excluded.first, photo = excluded.photo, hidden = excluded.hidden').bind(user.id, data, now, nameOf(user), rankScore(state), now, (user.first_name || 'Вождь').slice(0, 64), photo, state.noRank ? 1 : 0).run();
   return Response.json(verdict === 'fixed' ? {ok: false, save: data, savedAt: now, now} : {ok: true, savedAt: now, now});
 }
 
@@ -244,6 +256,7 @@ export default {
     else if (url.pathname === '/status') res = Response.json(await statusOf(env, user.id));
     else if (url.pathname === '/load') res = await load(env, user);
     else if (url.pathname === '/save') res = await store(env, user, body.save);
+    else if (url.pathname === '/top') res = await top(env, user);
     else res = new Response('not found', {status: 404});
     for (const [k, v] of Object.entries(cors)) res.headers.set(k, v);
     return res;

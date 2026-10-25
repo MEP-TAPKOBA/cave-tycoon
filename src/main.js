@@ -14,6 +14,7 @@ import {lesson, renderTutorial, resetTutorial} from './ui/tutorial.js';
 import {gift, pull, pullCloud, pullServer, save, saveNow, starShop, welcomeBack} from './ui/session.js';
 import {askMigrate, askRestart, claimStage} from './ui/progress.js';
 import {renderExtras} from './ui/shop.js';
+import {toggleHidden, toggleRating} from './ui/rating.js';
 
 function renderList() {
   renderLists();
@@ -51,6 +52,10 @@ for (const el of /** @type {NodeListOf<HTMLElement>} */ (document.querySelectorA
 }
 $('close').onclick = () => openSheet('');
 $('shells').onclick = () => openSheet(openSec === 'shop' ? '' : 'shop');
+$('rank').hidden = !serverSaves;
+$('hud').classList.toggle('ranked', serverSaves);
+$('rank').onclick = toggleRating;
+$('hideRank').onclick = toggleHidden;
 $('storyNext').onclick = () => $('coachOk').click();
 $('coachOk').onclick = () => {
   world.state.tut++;

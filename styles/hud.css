@@ -14,7 +14,9 @@
 .heat i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--orange),var(--gold));transition:width .2s}
 .bump{animation:bump .18s ease-out}
 @keyframes bump{50%{transform:scale(1.18)}}
-.tools{display:flex;gap:6px}
+.tools{display:flex;gap:6px;position:relative}
+#rank{position:absolute;left:0;top:calc(100% + 6px)}
+#hud.ranked .active{top:max(calc(100% + 6px), 88px)}
 .round{pointer-events:auto;background:var(--card);border:0;border-radius:14px;padding:6px;box-shadow:0 3px 0 var(--line)}
 .round img{width:26px;height:26px}
 .round.off img{opacity:.35;filter:grayscale(1)}

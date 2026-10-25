@@ -6,6 +6,7 @@ import {BOOSTS} from '../src/data/shop.js';
 import {WORKERS} from '../src/data/units.js';
 import {addMeat, claimAch, cooled, grant, heatTick, migrated, offline, purchase, purchaseBoost, restarted, shellReward} from '../src/core/economy.js';
 import {perSec} from '../src/core/formulas.js';
+import {rankScore} from '../src/core/quests.js';
 import {NOW, at} from './world.js';
 
 const HOUR = 3600e3;
@@ -117,4 +118,13 @@ test('подарок шамана: ракушки любого размера', 
   assert.equal(grant(w, 'gift:50').shells, 50);
   assert.equal(w.state.shells, 54);
   assert.equal(grant(w, 'gift:x'), undefined);
+});
+
+test('очки рейтинга: веха 1, переселение 2; выключатель переживает переселение и сброс', () => {
+  assert.equal(rankScore(at({valley: 0, stage: 3}).state), 3);
+  assert.equal(rankScore(at({valley: 1, stage: 2}).state), 4 + 2 + 2);
+  const w = at({valley: 2, stage: 5, noRank: true});
+  assert.equal(migrated(w).noRank, true);
+  assert.equal(restarted(w, false).noRank, true);
+  assert.equal(rankScore(restarted(w, false)), 0);
 });

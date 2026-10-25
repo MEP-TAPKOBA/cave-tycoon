@@ -77,7 +77,7 @@ $('mOk').onclick = () => {
 };
 $('mNo').onclick = () => $('modal').classList.remove('show');
 
-const TITLES = {quests: 'Задания и достижения', yard: 'Пещера и двор', tribe: 'Племя', farm: 'Ферма', techs: 'Открытия', shop: 'Лавка шамана'};
+const TITLES = {quests: 'Задания и достижения', yard: 'Пещера и двор', tribe: 'Племя', farm: 'Ферма', techs: 'Открытия', shop: 'Лавка шамана', rank: 'Рейтинг вождей'};
 export let openSec = '';
 
 /** @param {string} sec */

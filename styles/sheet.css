@@ -8,4 +8,4 @@
 h2{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--head);opacity:.85;margin:10px 4px 8px;display:flex;justify-content:space-between;gap:8px}
 #reset{display:block;margin:16px auto 0;background:none;border:0;color:var(--head);opacity:.7;text-decoration:underline;font-size:14px}
 #credit{text-align:center;color:var(--head);opacity:.45;font-size:11px;margin-top:10px}
-#tutAgain,#buzz{display:block;margin:12px auto 0;background:none;border:0;color:var(--head);opacity:.7;text-decoration:underline;font-size:14px}
+#tutAgain,#buzz,#hideRank{display:block;margin:12px auto 0;background:none;border:0;color:var(--head);opacity:.7;text-decoration:underline;font-size:14px}

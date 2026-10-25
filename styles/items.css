@@ -37,6 +37,13 @@
 .note span{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
 .note img{width:28px;height:28px;flex:none}
 .note.warn{background:#FFD7DC;color:var(--red)}
+.place{display:flex;align-items:center;gap:10px;background:var(--card);border-radius:14px;padding:6px 12px 6px 8px;margin-bottom:6px;box-shadow:0 3px 0 var(--line);height:52px}
+.place.me{background:#FFE08A}
+.place .pos{width:3ch;flex:none;text-align:right;font-weight:800;color:var(--orange-d)}
+.place .ava{width:36px;height:36px;flex:none;border-radius:50%;object-fit:cover;display:grid;place-items:center;font-weight:800;font-size:16px;color:#fff;background:var(--card2)}
+.place .who{flex:1;min-width:0;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.place .pts{flex:none;font-weight:800}
+#ranks .gap{text-align:center;color:var(--head);opacity:.7;font-weight:700;padding:4px 0 10px}
 .buy{flex:none;width:92px;height:34px;display:flex;flex-direction:column;align-items:center;justify-content:center;white-space:nowrap;overflow:hidden;padding:0 6px;border:0;border-radius:12px;background:var(--green);color:#fff;font-weight:800;font-size:15px;line-height:1.15;box-shadow:0 4px 0 var(--green-d);text-shadow:0 1px 0 rgba(0,0,0,.15)}
 .buy small{display:block;font-weight:600;font-size:11px;opacity:.9}
 .buy:active:not(:disabled){transform:translateY(3px);box-shadow:0 1px 0 var(--green-d)}
