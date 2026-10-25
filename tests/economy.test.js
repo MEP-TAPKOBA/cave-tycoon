@@ -4,7 +4,7 @@ import {BLESS_OFFLINE_CAP, KEEPER_HEAT, OFFLINE_CAP, OFFLINE_SHARE} from '../src
 import {up} from '../src/format.js';
 import {BOOSTS} from '../src/data/shop.js';
 import {WORKERS} from '../src/data/units.js';
-import {addMeat, claimAch, cooled, heatTick, migrated, offline, purchase, purchaseBoost, restarted, shellReward} from '../src/core/economy.js';
+import {addMeat, claimAch, cooled, grant, heatTick, migrated, offline, purchase, purchaseBoost, restarted, shellReward} from '../src/core/economy.js';
 import {perSec} from '../src/core/formulas.js';
 import {NOW, at} from './world.js';
 
@@ -110,4 +110,11 @@ test('достижение даёт ракушки один раз за ступ
   assert.equal(got.reward, 1);
   assert.equal(w.state.shells, 5);
   assert.equal(claimAch(w), null);
+});
+
+test('подарок шамана: ракушки любого размера', () => {
+  const w = at({shells: 4});
+  assert.equal(grant(w, 'gift:50').shells, 50);
+  assert.equal(w.state.shells, 54);
+  assert.equal(grant(w, 'gift:x'), undefined);
 });

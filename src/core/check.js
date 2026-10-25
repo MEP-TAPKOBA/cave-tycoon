@@ -2,10 +2,9 @@ import {BLESS_GIFT, MAX_SHELL_REWARD} from '../config.js';
 import {up} from '../format.js';
 import {ACHS} from '../data/achs.js';
 import {GENERIC_STAGES} from '../data/chapters.js';
-import {STAR_ITEMS} from '../data/shop.js';
 import {TECHS} from '../data/techs.js';
 import {ALL} from '../data/units.js';
-import {achReward, mammothMeat} from './economy.js';
+import {achReward, mammothMeat, starItem} from './economy.js';
 import {cap, perSec, perTap} from './formulas.js';
 import {fresh} from './state.js';
 
@@ -24,7 +23,7 @@ const FOREVER = Number.MAX_SAFE_INTEGER;
 export function ledgerOf(pays, blessUntil) {
   let bought = 0, blessDays = 0;
   for (const p of pays) {
-    const it = STAR_ITEMS.find(i => i.id === p.item);
+    const it = starItem(p.item);
     bought += (it?.shells || 0) * p.count;
     blessDays += (it?.days || 0) * p.count;
   }

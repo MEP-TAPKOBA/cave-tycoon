@@ -205,9 +205,15 @@ export function blessGift(w) {
   return true;
 }
 
+/** @param {string} id @returns {StarItem|undefined} */
+export function starItem(id) {
+  const gift = /^gift:(\d+)$/.exec(id);
+  return gift ? {id, name: 'Подарок шамана', icon: '1f41a', desc: '', stars: 0, shells: Number(gift[1])} : STAR_ITEMS.find(i => i.id === id);
+}
+
 /** @param {World} w @param {string} id @returns {StarItem|undefined} */
 export function grant(w, id) {
-  const it = STAR_ITEMS.find(i => i.id === id);
+  const it = starItem(id);
   if (it?.shells) w.state.shells += it.shells;
   return it;
 }

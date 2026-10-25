@@ -17,6 +17,8 @@ const itemOf = id => STAR_ITEMS.find(i => i.id === id);
 
 const SUPPORT = 'Вопросы по покупкам в «Пещерном магнате»: напиши сюда, что купил, когда и что пошло не так. Ответим и, если покупка не пришла, вернём звёзды.';
 const HELLO = 'Привет, вождь! Племя ждёт: костёр не разожжён, а мамонты бродят совсем рядом.\n\nЖми «Играть», чтобы открыть «Пещерного магната». Прогресс сохраняется на сервере игры, так что играть можно и с телефона, и с компьютера.\n\nВопросы по покупкам: /paysupport';
+const GIFT_USAGE = 'Формат: /gift <номер игрока> <сколько ракушек>, например /gift 123456789 50';
+const MAX_GIFT = 10000;
 const PASSED = 'Сообщение передано. Ответим здесь же, в этом чате.';
 const HOW_TO_REPLY = 'Ответь на это сообщение, чтобы ответить игроку.';
 
@@ -84,6 +86,17 @@ async function paid(env, msg) {
   await env.DB.batch(stmts);
 }
 
+/** @param {Env} env @param {any} msg @returns {Promise<object>} */
+async function gift(env, msg) {
+  const [, to, n] = String(msg.text).trim().split(/\s+/).map(Number);
+  const reply = (/** @type {string} */ text) => ({method: 'sendMessage', chat_id: msg.chat.id, text});
+  if (!Number.isInteger(to) || to <= 0 || !Number.isInteger(n) || n < 1 || n > MAX_GIFT) return reply(GIFT_USAGE);
+  await ensurePlayer(env, to);
+  await env.DB.prepare('INSERT INTO pays (charge, user_id, item, stars, at, given) VALUES (?, ?, ?, 0, ?, 0)').bind(`gift-${crypto.randomUUID()}`, to, `gift:${n}`, Date.now()).run();
+  const r = await api(env, 'sendMessage', {chat_id: to, text: `Шаман прислал тебе ракушки: ${n}. Загляни в игру, они уже ждут!`});
+  return reply(`Подарено ${n} ракушек игроку #id${to}. Получит при входе в игру.` + (r.ok ? '' : ' Сообщение игроку не дошло: он ещё не писал боту.'));
+}
+
 /** @param {Env} env @param {any} msg @returns {Promise<object|null>} */
 async function support(env, msg) {
   if (!env.ADMIN) return null;
@@ -114,6 +127,7 @@ async function hook(env, u) {
   const text = String(msg.text || '');
   if (text.startsWith('/paysupport')) return {method: 'sendMessage', chat_id: msg.chat.id, text: SUPPORT};
   if (text.startsWith('/start')) return {method: 'sendMessage', chat_id: msg.chat.id, text: HELLO, reply_markup: {inline_keyboard: [[{text: 'Играть', web_app: {url: env.GAME}}]]}};
+  if (text.startsWith('/gift') && env.ADMIN && String(msg.chat.id) === env.ADMIN) return gift(env, msg);
   if (text.startsWith('/')) return null;
   return support(env, msg);
 }

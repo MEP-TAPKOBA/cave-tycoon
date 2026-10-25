@@ -43,7 +43,7 @@ beforeEach(() => {
     calls.push({method: url.split('/').pop(), body: JSON.parse(init.body)});
     return Response.json({ok: true, result: 'https://t.me/invoice/x'});
   };
-  env = {TOKEN, HOOK, GAME, DB: {prepare: (/** @type {string} */ sql) => statement(db, sql), batch: async (/** @type {any[]} */ list) => { for (const st of list) await st.run(); }}};
+  env = {TOKEN, HOOK, GAME, ADMIN: '7', DB: {prepare: (/** @type {string} */ sql) => statement(db, sql), batch: async (/** @type {any[]} */ list) => { for (const st of list) await st.run(); }}};
 });
 
 /** @param {object} user @returns {string} */
@@ -145,4 +145,25 @@ test('устаревшая копия не затирает серверную',
 test('битый сейв: 400', async () => {
   const r = await worker.fetch(new Request('https://w.test/save', {method: 'POST', body: JSON.stringify({initData: initData(USER), save: '{"meat":"x"}'})}), env);
   assert.equal(r.status, 400);
+});
+
+/** @param {number} chat @param {string} text @returns {Promise<any>} */
+const say = (chat, text) => hook({message: {from: {id: chat, first_name: 'Деня'}, chat: {id: chat}, message_id: 1, text}}).then(r => r.status === 200 && r.headers.get('content-type')?.includes('json') ? r.json() : null);
+
+test('подарок ракушек командой /gift: игрок получает при входе, защита его учитывает', async () => {
+  const r = await say(7, `/gift ${USER.id} 50`);
+  assert.match(r.text, /Подарено 50 ракушек игроку #id42/);
+  assert.equal(calls.at(-1).body.chat_id, USER.id);
+  const claim = await ask('/claim');
+  assert.deepEqual(claim.items, ['gift:50']);
+  assert.equal((await ask('/save', {save: saveOf({shells: 50 + CEILING})})).ok, true);
+  assert.equal((await ask('/claim')).items.length, 0);
+});
+
+test('/gift: только из чата Дени и с понятными числами', async () => {
+  assert.equal(await say(USER.id, '/gift 42 50'), null);
+  assert.match((await say(7, '/gift 42')).text, /^Формат/);
+  assert.match((await say(7, '/gift 42 -5')).text, /^Формат/);
+  assert.match((await say(7, '/gift 42 100000')).text, /^Формат/);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM pays').get().n, 0);
 });

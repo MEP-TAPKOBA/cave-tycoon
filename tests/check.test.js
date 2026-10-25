@@ -89,3 +89,7 @@ test('битые числа отклоняются', () => {
   assert.equal(sane({...fresh(NOW), levels: {fire: Infinity}}), false);
   assert.equal(judge({...fresh(NOW), meat: -1}, null, 0, NONE, NOW).verdict, 'reject');
 });
+
+test('подарок шамана считается купленными ракушками', () => {
+  assert.equal(ledgerOf([{item: 'gift:50', count: 1}, {item: 'gift:7', count: 2}], 0).bought, 64);
+});
