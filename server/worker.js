@@ -90,6 +90,9 @@ async function paid(env, msg) {
   if (it?.once) stmts.push(env.DB.prepare('UPDATE players SET keeper = 1 WHERE id = ?').bind(id));
   if (it?.days) stmts.push(env.DB.prepare('UPDATE players SET bless_until = MAX(bless_until, ?) WHERE id = ?').bind((pay.subscription_expiration_date || Date.now() / 1000 + it.days * DAY) * 1000, id));
   await env.DB.batch(stmts);
+  if (!env.ADMIN) return;
+  const kind = pay.is_first_recurring ? ' (первая оплата)' : pay.is_recurring ? ' (продление)' : '';
+  await api(env, 'sendMessage', {chat_id: env.ADMIN, text: `Покупка: ${it?.name || item}${kind}, ${pay.total_amount} звёзд.\n${nameOf(msg.from)}, игрок #id${id}`}).catch(() => null);
 }
 
 /** @param {Env} env @param {any} msg @returns {Promise<object>} */

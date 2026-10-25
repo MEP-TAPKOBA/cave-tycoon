@@ -249,3 +249,13 @@ test('рейтинг: свежий сейв в запросе /top сразу д
   const forged = await ask('/top', {save: saveOf({valley: 50, stage: 0})});
   assert.equal(forged.score, 2);
 });
+
+test('после оплаты Дене приходит сообщение о покупке', async () => {
+  calls = [];
+  await pay('shells30', 'c9');
+  const alert = calls.find(c => c.method === 'sendMessage' && c.body.chat_id === '7');
+  assert.equal(alert.body.text, 'Покупка: Горсть ракушек, 50 звёзд.\nВождь, игрок #id42');
+  calls = [];
+  await hook({message: {from: USER, chat: {id: USER.id}, successful_payment: {invoice_payload: 'bless', total_amount: 300, telegram_payment_charge_id: 'c10', is_recurring: true}}});
+  assert.match(calls.find(c => c.body.chat_id === '7').body.text, /^Покупка: Благословение шамана \(продление\), 300 звёзд/);
+});
