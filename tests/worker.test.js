@@ -34,6 +34,10 @@ let db;
 let calls;
 /** @type {any} */
 let env;
+/** @type {Map<string, string>} */
+let kv;
+/** @type {Set<number>} */
+let blocked;
 
 beforeEach(() => {
   db = new DatabaseSync(':memory:');
@@ -41,9 +45,13 @@ beforeEach(() => {
   calls = [];
   globalThis.fetch = async (/** @type {string} */ url, /** @type {any} */ init) => {
     calls.push({method: url.split('/').pop(), body: JSON.parse(init.body)});
-    return Response.json({ok: true, result: 'https://t.me/invoice/x'});
+    const method = url.split('/').pop();
+    if (method === 'sendMessage' && blocked.has(JSON.parse(init.body).chat_id)) return Response.json({ok: false, description: 'Forbidden: bot was blocked by the user'});
+    return Response.json({ok: true, result: method === 'createInvoiceLink' ? 'https://t.me/invoice/x' : {message_id: 100 + calls.length}});
   };
-  env = {TOKEN, HOOK, GAME, ADMIN: '7', DB: {prepare: (/** @type {string} */ sql) => statement(db, sql), batch: async (/** @type {any[]} */ list) => { for (const st of list) await st.run(); }}};
+  kv = new Map();
+  blocked = new Set();
+  env = {TOKEN, HOOK, GAME, ADMIN: '7', KV: {get: async (/** @type {string} */ k) => kv.get(k) ?? null, put: async (/** @type {string} */ k, /** @type {string} */ v) => void kv.set(k, v)}, DB: {prepare: (/** @type {string} */ sql) => statement(db, sql), batch: async (/** @type {any[]} */ list) => { for (const st of list) await st.run(); }}};
 });
 
 /** @param {object} user @returns {string} */
@@ -173,4 +181,37 @@ test('сейв до вайпа (без метки эпохи) сервер не 
   const r = await worker.fetch(new Request('https://w.test/save', {method: 'POST', body: JSON.stringify({initData: initData(USER), save: old})}), env);
   assert.equal(r.status, 400);
   assert.equal(db.prepare('SELECT COUNT(*) AS n FROM saves').get().n, 0);
+});
+
+/** @param {object} reply @returns {Promise<any>} */
+const answer = reply => hook({message: {from: {id: 7}, chat: {id: 7}, message_id: 2, text: '/send', reply_to_message: reply}}).then(r => r.json());
+
+test('/start записывает игрока, чтобы до него доходила рассылка', async () => {
+  await say(55, '/start');
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM players WHERE id = 55').get().n, 1);
+});
+
+test('рассылка: черновик, /send ответом на него, повтор не шлёт дважды', async () => {
+  for (const id of [7, 55, 56, 57]) await say(id, '/start');
+  blocked.add(57);
+  calls = [];
+  const r = await say(7, '/all Привет, вождь!\nНовая версия уже в игре.');
+  assert.match(r.text, /игроки \(3\)/);
+  assert.equal(calls[0].body.text, 'Привет, вождь!\nНовая версия уже в игре.');
+  const draft = {message_id: 100 + 1, from: {is_bot: true}, text: calls[0].body.text};
+  calls = [];
+  assert.match((await answer(draft)).text, /^Разослано: 2 из 3 \(остальные закрыли бота\)\.$/);
+  assert.deepEqual(calls.map(c => c.body.chat_id), [55, 56, 57]);
+  calls = [];
+  assert.match((await answer(draft)).text, /^Разослано: 0 из 0\.$/);
+  assert.equal(calls.length, 0);
+});
+
+test('рассылка: /send не на черновик и чужие команды не срабатывают', async () => {
+  await say(55, '/start');
+  calls = [];
+  assert.match((await answer({message_id: 999, from: {is_bot: true}, text: 'Сообщение от игрока'})).text, /^Ответь командой \/send/);
+  assert.match((await say(7, '/all')).text, /^Формат/);
+  assert.equal(await say(55, '/all всем привет'), null);
+  assert.equal(calls.length, 0);
 });

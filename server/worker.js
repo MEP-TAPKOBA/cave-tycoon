@@ -20,6 +20,8 @@ const SUPPORT = 'Вопросы по покупкам в «Пещерном ма
 const HELLO = 'Привет, вождь! Племя ждёт: костёр не разожжён, а мамонты бродят совсем рядом.\n\nЖми «Играть», чтобы открыть «Пещерного магната». Прогресс сохраняется на сервере игры, так что играть можно и с телефона, и с компьютера.\n\nВопросы по покупкам: /paysupport';
 const GIFT_USAGE = 'Формат: /gift <номер игрока> <сколько ракушек>, например /gift 123456789 50';
 const MAX_GIFT = 10000;
+const ALL_USAGE = 'Формат: /all <текст рассылки>. Бот покажет черновик, отправка - ответом /send на него.';
+const MAX_BROADCAST = 45;
 const PASSED = 'Сообщение передано. Ответим здесь же, в этом чате.';
 const HOW_TO_REPLY = 'Ответь на это сообщение, чтобы ответить игроку.';
 
@@ -98,6 +100,41 @@ async function gift(env, msg) {
   return reply(`Подарено ${n} ракушек игроку #id${to}. Получит при входе в игру.` + (r.ok ? '' : ' Сообщение игроку не дошло: он ещё не писал боту.'));
 }
 
+/** @param {Env} env @param {string} admin @returns {Promise<number[]>} */
+async function audience(env, admin) {
+  const {results} = await env.DB.prepare('SELECT id FROM players ORDER BY id').all();
+  return results.map((/** @type {{id:number}} */ r) => r.id).filter((/** @type {number} */ id) => String(id) !== admin);
+}
+
+/** @param {Env} env @param {any} msg @returns {Promise<object>} */
+async function draft(env, msg) {
+  const text = String(msg.text).replace(/^\/all(@\w+)?\s*/, '').trim();
+  if (!text) return {method: 'sendMessage', chat_id: msg.chat.id, text: ALL_USAGE};
+  if (!env.KV) return {method: 'sendMessage', chat_id: msg.chat.id, text: 'Рассылка не работает: у сервера нет KV.'};
+  const n = (await audience(env, env.ADMIN)).length;
+  const sent = await api(env, 'sendMessage', {chat_id: msg.chat.id, text});
+  if (!sent.ok) return {method: 'sendMessage', chat_id: msg.chat.id, text: `Черновик не создан: ${sent.description || 'ошибка Telegram'}`};
+  await env.KV.put(`draft:${sent.result.message_id}`, '[]', {expirationTtl: 30 * DAY});
+  return {method: 'sendMessage', chat_id: msg.chat.id, text: `Так сообщение увидят игроки (${n}). Чтобы разослать, ответь на него командой /send.` + (n > MAX_BROADCAST ? ` За один раз уйдёт ${MAX_BROADCAST}, остальным - повторным /send на тот же черновик.` : '')};
+}
+
+/** @param {Env} env @param {any} msg @returns {Promise<object>} */
+async function broadcast(env, msg) {
+  const src = msg.reply_to_message, reply = (/** @type {string} */ text) => ({method: 'sendMessage', chat_id: msg.chat.id, text});
+  const key = `draft:${src?.message_id}`, saved = src?.text && env.KV ? await env.KV.get(key) : null;
+  if (saved === null) return reply('Ответь командой /send на черновик, который прислал бот после /all.');
+  const done = new Set(JSON.parse(saved));
+  const ids = (await audience(env, env.ADMIN)).filter(id => !done.has(id)), batch = ids.slice(0, MAX_BROADCAST);
+  let ok = 0;
+  for (const id of batch) {
+    done.add(id);
+    if ((await api(env, 'sendMessage', {chat_id: id, text: src.text})).ok) ok++;
+  }
+  await env.KV.put(key, JSON.stringify([...done]), {expirationTtl: 30 * DAY});
+  const left = ids.length - batch.length;
+  return reply(`Разослано: ${ok} из ${batch.length}` + (batch.length > ok ? ' (остальные закрыли бота)' : '') + (left ? `. Осталось ${left}: ответь /send на тот же черновик ещё раз.` : '.'));
+}
+
 /** @param {Env} env @param {any} msg @returns {Promise<object|null>} */
 async function support(env, msg) {
   if (!env.ADMIN) return null;
@@ -127,8 +164,14 @@ async function hook(env, u) {
   }
   const text = String(msg.text || '');
   if (text.startsWith('/paysupport')) return {method: 'sendMessage', chat_id: msg.chat.id, text: SUPPORT};
-  if (text.startsWith('/start')) return {method: 'sendMessage', chat_id: msg.chat.id, text: HELLO, reply_markup: {inline_keyboard: [[{text: 'Играть', web_app: {url: env.GAME}}]]}};
-  if (text.startsWith('/gift') && env.ADMIN && String(msg.chat.id) === env.ADMIN) return gift(env, msg);
+  if (text.startsWith('/start')) {
+    await ensurePlayer(env, msg.from.id);
+    return {method: 'sendMessage', chat_id: msg.chat.id, text: HELLO, reply_markup: {inline_keyboard: [[{text: 'Играть', web_app: {url: env.GAME}}]]}};
+  }
+  const admin = Boolean(env.ADMIN) && String(msg.chat.id) === env.ADMIN;
+  if (admin && text.startsWith('/gift')) return gift(env, msg);
+  if (admin && text.startsWith('/all')) return draft(env, msg);
+  if (admin && text.startsWith('/send')) return broadcast(env, msg);
   if (text.startsWith('/')) return null;
   return support(env, msg);
 }
