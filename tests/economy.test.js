@@ -128,3 +128,10 @@ test('очки рейтинга: веха 1, переселение 2; выкл�
   assert.equal(restarted(w, false).noRank, true);
   assert.equal(rankScore(restarted(w, false)), 0);
 });
+
+test('Хранитель огня выключается и не держит жар; выбор переживает переселение', () => {
+  const on = at({perks: ['keeper']}, {heat: 0}), off = at({perks: ['keeper'], keeperOff: true}, {heat: 0});
+  assert.equal(heatTick(on, 1, 0), KEEPER_HEAT);
+  assert.equal(heatTick(off, 1, 0), 0);
+  assert.equal(migrated(off).keeperOff, true);
+});

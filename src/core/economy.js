@@ -137,7 +137,7 @@ export function stokeHeat(w) {
 /** @param {World} w @param {number} dt @param {number} night @returns {number} */
 export function heatTick(w, dt, night) {
   const heat = boostOn(w, 'feast') ? 100 : Math.max(0, w.heat - dt * (1 + night * 1.5) / 5 * (has(w, 'flint') ? .5 : 1));
-  return perkOn(w, 'keeper') && night < .5 ? Math.max(heat, KEEPER_HEAT) : heat;
+  return perkOn(w, 'keeper') && !w.state.keeperOff && night < .5 ? Math.max(heat, KEEPER_HEAT) : heat;
 }
 
 /** @param {World} w @param {number} from @param {number} ms @returns {number} */
@@ -180,14 +180,14 @@ export const shellReward = w => Math.min(MAX_SHELL_REWARD, 2 + Math.floor(w.stat
 /** @param {World} w @returns {State} */
 export function migrated(w) {
   const s = w.state;
-  const keep = {muted: s.muted, music: s.music, noBuzz: s.noBuzz, noRank: s.noRank, noTut: s.noTut, shells: s.shells + shellReward(w), boosts: s.boosts, perks: s.perks, mammothRest: s.mammothRest, tiers: s.tiers, blessUntil: s.blessUntil, blessDay: s.blessDay, restarts: s.restarts, life: {...s.life, migrations: s.life.migrations + 1}};
+  const keep = {muted: s.muted, music: s.music, noBuzz: s.noBuzz, noRank: s.noRank, keeperOff: s.keeperOff, noTut: s.noTut, shells: s.shells + shellReward(w), boosts: s.boosts, perks: s.perks, mammothRest: s.mammothRest, tiers: s.tiers, blessUntil: s.blessUntil, blessDay: s.blessDay, restarts: s.restarts, life: {...s.life, migrations: s.life.migrations + 1}};
   return {...fresh(), ...keep, valley: s.valley + 1, tut: s.noTut ? TUT_DONE : 0};
 }
 
 /** @param {World} w @param {boolean} keeper @returns {State} */
 export function restarted(w, keeper) {
   const s = w.state;
-  return {...fresh(), muted: s.muted, music: s.music, noBuzz: s.noBuzz, noRank: s.noRank, blessUntil: s.blessUntil, blessDay: s.blessDay, restarts: s.restarts + 1, perks: keeper ? ['keeper'] : []};
+  return {...fresh(), muted: s.muted, music: s.music, noBuzz: s.noBuzz, noRank: s.noRank, keeperOff: s.keeperOff, blessUntil: s.blessUntil, blessDay: s.blessDay, restarts: s.restarts + 1, perks: keeper ? ['keeper'] : []};
 }
 
 /** @param {World} w @param {{keeper?:boolean,blessUntil?:number}} status */

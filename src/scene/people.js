@@ -1,9 +1,9 @@
 import {num, up} from '../format.js';
 import {WORKERS} from '../data/units.js';
-import {hurt, lvl, rateOf, speed} from '../core/formulas.js';
+import {hurt, lvl, perkOn, rateOf, speed} from '../core/formulas.js';
 import {beep, gain, world} from '../game.js';
 import {CAVE, ctx, farmBox, FOREST, H, pill, spotOf, spriteAt, U, W} from './view.js';
-import {floater} from './fx.js';
+import {burst, floater} from './fx.js';
 import {bump} from '../ui/dom.js';
 
 /** @typedef {import('../data/units.js').Def} Def */
@@ -248,4 +248,50 @@ export function folkDepth(t, farm) {
   });
   if (!farm) folkReady = true;
   return out;
+}
+
+/** @type {Look} */
+const KEEPER = {color: '#7B2D26', dress: true, hair: '#E1E8ED', skin: '#C08A5B', leg: '#9E6E44', bead: '#FFCC4D', band: '#FFCC4D', hat: 'chief'};
+const TOSS = 2.4;
+const HOLD = 1.4;
+const FLIGHT = .5;
+let keeperT = 0, dozeT = 0;
+
+/** @returns {boolean} */
+const keeperAwake = () => !world.state.keeperOff && world.night < .5;
+/** @returns {[number, number]} */
+const keeperSpot = () => [spotOf('fire').x - 16 * U, spotOf('fire').y + 22 * U];
+
+/** @param {number} dt */
+export function keeperTick(dt) {
+  if (!perkOn(world, 'keeper')) return;
+  const [x, y] = keeperSpot();
+  if (!keeperAwake()) {
+    keeperT = 0;
+    if ((dozeT -= dt) <= 0) {
+      dozeT = 1.6;
+      floater(x - 4 * U, y - 46 * U, 'z', '#DDE6FF', 11);
+    }
+    return;
+  }
+  const was = keeperT;
+  keeperT = (keeperT + dt) % TOSS;
+  if (was < HOLD + FLIGHT && keeperT >= HOLD + FLIGHT) {
+    const f = spotOf('fire');
+    burst(f.x, f.y - 12 * U, 10, '#ffa424');
+  }
+}
+
+/** @returns {Depth[]} */
+export function keeperDepth() {
+  if (!perkOn(world, 'keeper')) return [];
+  const [x, y] = keeperSpot(), s = U * .9;
+  if (!keeperAwake()) return [{y, draw: () => drawPerson(x, y, s, -1, 0, false, {...KEEPER, spear: true})}];
+  const p = (keeperT - HOLD) / FLIGHT, flying = p >= 0 && p < 1, hop = flying ? Math.sin(p * Math.PI) * 3 * U : 0;
+  return [{y, draw: () => {
+    drawPerson(x, y - hop, s, 1, 0, false, keeperT < HOLD ? {...KEEPER, carry: 'wood'} : KEEPER);
+    if (!flying) return;
+    const f = spotOf('fire'), x0 = x - 7 * s, y0 = y - 44 * s, x1 = f.x, y1 = f.y - 8 * U;
+    spriteAt('wood', x0 + (x1 - x0) * p, y0 + (y1 - y0) * p - Math.sin(p * Math.PI) * 30 * U, 24 * s, 1.4 + p * 8);
+  }}];
 }

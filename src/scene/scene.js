@@ -4,7 +4,7 @@ import {heatTick, stokeHeat, tapped} from '../core/economy.js';
 import {beep, buzz, gain, world} from '../game.js';
 import {bubble, CAVE, ctx, FH, glow, H, hits, mix, pill, shade, sign, spotOf, sprite, spriteAt, tag, theme, treeKind, U, W} from './view.js';
 import {burst, drawFx, floater, fly, fxTick, particles} from './fx.js';
-import {drawWalker, folkDepth, kidsDepth, kidsTick, moveWalker, walkers, walkerY} from './people.js';
+import {drawWalker, folkDepth, keeperDepth, keeperTick, kidsDepth, kidsTick, moveWalker, walkers, walkerY} from './people.js';
 import {critters, drawFarm, farmTick} from './farm.js';
 import {catchMammoth, drawMammoth, drawTiger, hitTiger, mammoth, mammothTick, resetBeasts, tiger, tigerTick} from './beasts.js';
 import {bump} from '../ui/dom.js';
@@ -41,6 +41,7 @@ export function update(dt) {
   walkers.forEach(w => moveWalker(w, dt));
   farmTick(dt);
   kidsTick(dt);
+  keeperTick(dt);
   for (const c of clouds) {
     c[0] += .01 * dt;
     if (c[0] > 1.25) c[0] = -.25;
@@ -248,7 +249,7 @@ export function draw(t) {
   for (let i = 0; i < 5; i++) sprite(tree, W * (.87 + i * .04), H * .61, 34 * U);
   drawCave(t);
   drawStations(t);
-  const depth = [...folkDepth(t, false), ...walkers.map(w => ({y: walkerY(w), draw: () => drawWalker(w)})), ...kidsDepth(t)];
+  const depth = [...folkDepth(t, false), ...walkers.map(w => ({y: walkerY(w), draw: () => drawWalker(w)})), ...kidsDepth(t), ...keeperDepth()];
   if (mammoth) depth.push({y: mammoth.lane * H, draw: () => drawMammoth(t)});
   if (tiger) depth.push({y: tiger.lane * H, draw: () => drawTiger(t)});
   for (const d of depth.sort((a, b) => a.y - b.y)) d.draw();
