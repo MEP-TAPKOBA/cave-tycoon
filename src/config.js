@@ -1,0 +1,16 @@
+export const OFFLINE_CAP = 2 * 3600;
+export const OFFLINE_SHARE = .65;
+export const BLESS_OFFLINE_CAP = 4 * 3600;
+export const BLESS_BOOST = 1.25;
+export const BLESS_GIFT = 5;
+export const HARVEST = 5 * 60;
+export const KEEPER_HEAT = 50;
+export const AWAY_COOL = .2;
+export const MAX_SHELL_REWARD = 10;
+export const MAMMOTH_REST = 5 * 60;
+export const MILESTONE = 25;
+export const MILESTONE_BOOST = 1.4;
+export const SAVE_KEY = 'cave-tycoon';
+export const SERVER = 'https://cave-tycoon.mep-tapkoba.workers.dev';
+export const CLOUD_EVERY = 20e3;
+export const CLOUD_MAX = 4096;
