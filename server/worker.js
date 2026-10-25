@@ -214,7 +214,7 @@ async function top(env, user) {
   const {results} = await env.DB.prepare('SELECT id, first, photo, score FROM saves WHERE hidden = 0 ORDER BY score DESC, score_at, id LIMIT ?').bind(TOP).all();
   const me = await env.DB.prepare('SELECT score, score_at, hidden FROM saves WHERE id = ?').bind(user.id).first();
   const ahead = me && !me.hidden ? await env.DB.prepare('SELECT COUNT(*) AS n FROM saves WHERE hidden = 0 AND (score > ? OR (score = ? AND (score_at < ? OR (score_at = ? AND id < ?))))').bind(me.score, me.score, me.score_at, me.score_at, user.id).first() : null;
-  return Response.json({top: results.map((/** @type {{id:number,first:string,photo:string,score:number}} */ r) => ({name: r.first, photo: r.photo, score: r.score, me: r.id === user.id})), place: ahead ? ahead.n + 1 : 0, score: me?.score ?? 0, hidden: Boolean(me?.hidden)});
+  return Response.json({top: results.map((/** @type {{id:number,first:string,photo:string,score:number}} */ r) => ({name: r.first || 'Вождь', photo: r.photo, score: r.score, me: r.id === user.id})), place: ahead ? ahead.n + 1 : 0, score: me?.score ?? 0, hidden: Boolean(me?.hidden)});
 }
 
 /** @param {Env} env @param {User} user @param {unknown} text @returns {Promise<Response>} */
