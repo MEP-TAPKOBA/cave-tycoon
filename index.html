@@ -269,6 +269,7 @@ const CLOUD_EVERY = 20e3;
 const CLOUD_MAX = 4096;
 /** @param {string} v @returns {boolean} */
 const tgAt = v => inTelegram && tg.isVersionAtLeast(v);
+const serverSaves = inTelegram && Boolean(SERVER);
 if (inTelegram) {
   tg.ready();
   tg.expand();
@@ -423,9 +424,10 @@ function load() {
   try { return parseSave(localStorage.getItem(SAVE_KEY)) || fresh(); } catch { return fresh(); }
 }
 
-let cloudAt = 0;
-let cloudReady = false;
+let syncAt = 0;
+let remoteReady = false;
 let frozen = false;
+let pulling = false;
 
 function save() {
   if (frozen) return;
@@ -433,31 +435,74 @@ function save() {
   state.heat = heat;
   const json = JSON.stringify(state);
   try { localStorage.setItem(SAVE_KEY, json); } catch {}
-  if (!cloudReady || json.length > CLOUD_MAX || Date.now() - cloudAt < CLOUD_EVERY) return;
-  cloudAt = Date.now();
-  tg.CloudStorage.setItem(SAVE_KEY, json, () => {});
+  if (!remoteReady || Date.now() - syncAt < CLOUD_EVERY) return;
+  syncAt = Date.now();
+  if (serverSaves) pushSave(json);
+  else if (json.length <= CLOUD_MAX) tg.CloudStorage.setItem(SAVE_KEY, json, () => {});
 }
 
 function saveNow() {
-  cloudAt = 0;
+  syncAt = 0;
   save();
 }
 
 /** @param {State} a @param {State} b @returns {boolean} */
 const ahead = (a, b) => a.restarts !== b.restarts ? a.restarts > b.restarts : a.life.migrations !== b.life.migrations ? a.life.migrations > b.life.migrations : a.life.earned > b.life.earned;
 
+/** @param {string} json @param {number} away */
+function adopt(json, away) {
+  const s = parseSave(json);
+  if (!s) return;
+  frozen = true;
+  s.savedAt = Date.now() - away;
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(s)); } catch {}
+  location.reload();
+}
+
+/** @param {string} json */
+function pushSave(json) {
+  fetch(SERVER + '/save', {method: 'POST', keepalive: true, body: JSON.stringify({initData: tg.initData, save: json})})
+    .then(r => r.ok ? r.json() : null)
+    .then(r => r && !r.ok && adopt(r.save, r.now - r.savedAt))
+    .catch(() => {});
+}
+
+/** @returns {Promise<string|null>} */
+const cloudSave = () => new Promise(done => tgAt('6.9') ? tg.CloudStorage.getItem(SAVE_KEY, (/** @type {any} */ err, /** @type {string} */ json) => done(err ? null : json || null)) : done(null));
+
 function pullCloud() {
   if (!tgAt('6.9')) return;
-  tg.CloudStorage.getItem(SAVE_KEY, (/** @type {any} */ err, /** @type {string} */ json) => {
-    if (err) return;
-    cloudReady = true;
+  cloudSave().then(json => {
+    remoteReady = true;
     const cloud = json ? parseSave(json) : null;
-    if (!cloud || !ahead(cloud, state)) return saveNow();
-    frozen = true;
-    try { localStorage.setItem(SAVE_KEY, json); } catch {}
-    location.reload();
+    if (cloud && ahead(cloud, state)) return adopt(json, Date.now() - cloud.savedAt);
+    saveNow();
   });
 }
+
+async function pullServer() {
+  if (pulling) return;
+  pulling = true;
+  /** @type {{save:string|null,savedAt:number,now:number}|null} */
+  let r = null;
+  try { r = await ask('/load'); } catch {}
+  pulling = false;
+  if (!r) return welcomeBack(state.savedAt);
+  remoteReady = true;
+  const server = r.save ? parseSave(r.save) : null;
+  if (server && ahead(server, state)) return adopt(r.save, r.now - r.savedAt);
+  if (!server) {
+    const json = await cloudSave(), cloud = json ? parseSave(json) : null;
+    if (cloud && ahead(cloud, state)) {
+      await ask('/save', {save: json}).catch(() => {});
+      return adopt(json, Date.now() - cloud.savedAt);
+    }
+  }
+  welcomeBack(server ? Date.now() - Math.min(Date.now() - state.savedAt, r.now - r.savedAt) : state.savedAt);
+  saveNow();
+}
+
+const pull = () => serverSaves ? pullServer() : pullCloud();
 
 /** @type {State} */
 let state = load();
@@ -2747,7 +2792,7 @@ build(FARM, $('farm'));
 syncWalkers();
 openSheet('');
 heat = cooled(state.heat, Date.now() - state.savedAt);
-welcomeBack(state.savedAt);
+if (!serverSaves) welcomeBack(state.savedAt);
 
 canvas.addEventListener('pointerdown', e => {
   const r = canvas.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
@@ -2831,12 +2876,13 @@ setInterval(() => document.hidden || save(), 5000);
 let hiddenAt = 0;
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) {
-    pullCloud();
     audio?.resume();
     if (hiddenAt) heat = cooled(heat, Date.now() - hiddenAt);
     tigerIn = Math.max(tigerIn, 20);
     if (tiger && !tiger.fleeing) tiger.xf = Math.max(tiger.xf, .95);
     blessGift();
+    if (serverSaves) return void pullServer();
+    pullCloud();
     return welcomeBack(state.savedAt);
   }
   hiddenAt = Date.now();
@@ -2846,9 +2892,9 @@ document.addEventListener('visibilitychange', () => {
 addEventListener('pagehide', saveNow);
 if (tgAt('8.0')) {
   tg.onEvent('deactivated', saveNow);
-  tg.onEvent('activated', pullCloud);
+  tg.onEvent('activated', pull);
 }
-pullCloud();
+pull();
 syncStars();
 renderList();
 </script>
