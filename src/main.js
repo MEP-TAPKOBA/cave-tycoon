@@ -1,12 +1,22 @@
-import {AWAY_COOL, BLESS_BOOST, BLESS_GIFT, BLESS_OFFLINE_CAP, CLOUD_EVERY, CLOUD_MAX, HARVEST, KEEPER_HEAT, MAMMOTH_REST, MAX_SHELL_REWARD, MILESTONE, MILESTONE_BOOST, OFFLINE_CAP, OFFLINE_SHARE, SAVE_KEY, SERVER} from './config.js';
+import {BLESS_BOOST, BLESS_GIFT, HARVEST, MILESTONE, MILESTONE_BOOST} from './config.js';
 import {num, pct, plural, up} from './format.js';
 import {ACHS} from './data/achs.js';
-import {CHAPTERS, EXTRAS, FEATURE_AT, GENERIC_STAGES, GOALS} from './data/chapters.js';
+import {CHAPTERS, FEATURE_AT} from './data/chapters.js';
 import {BOOSTS, STAR_ITEMS} from './data/shop.js';
 import {TECHS} from './data/techs.js';
 import {ALL, ANIMALS, FARM, STATIONS, WORKERS} from './data/units.js';
 import {VALLEYS} from './data/valleys.js';
+import {STAT, animalRate, blessed, boostOn, cap, costOf, grainCap, grainNeed, grainRate, harvestSize, has, herd, hurt, isScared, legacy, lvl, milestones, opened, pens, perkOn, perSec, perTap, ranked, rateOf, seats, speed, staff, unlocked} from './core/formulas.js';
+import {ACH_NOW, achReward, addMeat, advanceStage, blessGift, caughtMammoth, claimAch, cooled, farmStep, heatTick, mammothMeat, migrated, offline, purchase, purchaseBoost, purchaseTech, raid, recover, release, restarted, stokeHeat, tapped, tierOf, tigerScared, shellReward, amount} from './core/economy.js';
+import {quests, stageCount} from './core/quests.js';
+import {TUT_DONE} from './core/state.js';
+import {createSaves, load} from './platform/saves.js';
+import {createSound} from './platform/sound.js';
+import {createStars} from './platform/stars.js';
+import {buzzer, serverSaves, shopStars, tg, tgAt} from './platform/telegram.js';
 
+/** @typedef {import('./core/state.js').State} State */
+/** @typedef {import('./core/state.js').World} World */
 /** @typedef {import('./data/units.js').Def} Def */
 /** @typedef {import('./data/techs.js').Tech} Tech */
 /** @typedef {import('./data/valleys.js').Valley} Valley */
@@ -15,7 +25,6 @@ import {VALLEYS} from './data/valleys.js';
 /** @typedef {import('./data/shop.js').StarItem} StarItem */
 /** @typedef {import('./data/achs.js').AchLine} AchLine */
 /** @typedef {{def:Def,xf:number,yf:number,vx:number,step:number}} Critter */
-/** @typedef {{meat:number,levels:Record<string,number>,savedAt:number,muted:boolean,valley:number,stage:number,earned:number,taps:number,mammoths:number,tigers:number,techs:string[],scaredUntil:number,injured:Record<string,number>,grain:number,harvest:number,perks:string[],mammothRest:number,music:boolean,tut:number,peakHeat:number,noTut:boolean,shells:number,boosts:Record<string,number>,tiers:Record<string,number>,life:{taps:number,earned:number,mammoths:number,tigers:number,migrations:number},econ:number,blessUntil:number,blessDay:string,restarts:number,heat:number,noBuzz:boolean}} State */
 /** @typedef {{def:Def,xf:number,lane:number,dir:number,wait:number,carry:boolean,step:number}} Walker */
 /** @typedef {{color:string,carry?:boolean|string,spear?:boolean,raise?:boolean,hat?:string,skin?:string,leg?:string,hair?:string,beard?:boolean,long?:boolean,dress?:boolean,bead?:string,band?:string,scythe?:number}} Look */
 /** @typedef {{phase:string,i:number,xf:number,yf:number,dir:number,step:number,moving:boolean,swing:number,mowing:boolean,cut:boolean[],grow:number,stack:number,carry:boolean,placed:boolean}} Farmer */
@@ -26,7 +35,6 @@ import {VALLEYS} from './data/valleys.js';
 /** @typedef {{xf:number,lane:number,fleeing:boolean,step:number,caught?:boolean,phase?:string,fall?:number,lift?:number,stuck?:number,crew?:Hunter[],spears?:Spear[]}} Mammoth */
 /** @typedef {{kind:'dot'|'smoke'|'fly'|'text',x:number,y:number,vx:number,vy:number,life:number,max:number,size:number,color:string,grav?:number,text?:string,delay?:number,speed?:number}} Particle */
 /** @typedef {{def:Def,el:HTMLElement,btn:HTMLButtonElement,drop:HTMLButtonElement,level:HTMLElement,info:HTMLElement,prog:HTMLElement,x2:HTMLElement,pbar:HTMLElement,eat:HTMLElement|null,html:string}} Row */
-/** @typedef {{text:string,goal:number,now:number}} Quest */
 
 /** @type {[number, number][]} */
 const CREW = [[-.17, -.03], [-.13, .05], [.15, -.03], [.19, .05], [.01, .08]];
@@ -44,211 +52,20 @@ const $ = id => document.getElementById(id);
 /** @param {string} code @returns {string} */
 const icon = code => `assets/twemoji/${code}.svg`;
 
-/** @type {any} */
-const tg = /** @type {any} */ (window).Telegram?.WebApp;
-const inTelegram = Boolean(tg?.initData);
-/** @param {string} v @returns {boolean} */
-const tgAt = v => inTelegram && tg.isVersionAtLeast(v);
-const serverSaves = inTelegram && Boolean(SERVER);
-if (inTelegram) {
-  tg.ready();
-  tg.expand();
-  if (tgAt('7.7')) tg.disableVerticalSwipes();
-  if (tgAt('6.1')) {
-    tg.setHeaderColor('#2E1F17');
-    tg.setBackgroundColor('#140D09');
-  }
-}
-
-/** @param {number|number[]} pattern */
-function buzz(pattern) {
-  if (state.noBuzz) return;
-  if (!tgAt('6.1')) return void navigator.vibrate?.(pattern);
-  if (Array.isArray(pattern)) return void tg.HapticFeedback.notificationOccurred(pattern[0] > 40 ? 'warning' : 'success');
-  tg.HapticFeedback.impactOccurred(pattern > 20 ? 'heavy' : pattern > 10 ? 'medium' : 'light');
-}
-
-/** @returns {State} */
-const fresh = () => ({meat: 0, levels: {}, savedAt: Date.now(), muted: false, valley: 0, stage: 0, earned: 0, taps: 0, mammoths: 0, tigers: 0, techs: [], scaredUntil: 0, injured: {}, grain: 0, harvest: HARVEST, perks: [], mammothRest: 0, music: true, tut: 0, peakHeat: 0, noTut: false, shells: 4, boosts: {}, tiers: {}, life: {taps: 0, earned: 0, mammoths: 0, tigers: 0, migrations: 0}, econ: 2, blessUntil: 0, blessDay: '', restarts: 0, heat: 0, noBuzz: false});
-const TUT_DONE = 99;
-/** @param {string} id @returns {boolean} */
-const boostOn = id => (state.boosts[id] || 0) > Date.now();
-/** @returns {boolean} */
-const blessed = () => state.blessUntil > Date.now();
-/** @returns {number} */
-const bless = () => blessed() ? BLESS_BOOST : 1;
-/** @param {string} id @returns {boolean} */
-const perkOn = id => state.perks.includes(id);
-/** @param {string} id @returns {boolean} */
-const opened = id => state.valley >= (FEATURE_AT[id] ?? 0);
-
-/** @param {string|null} json @returns {State|null} */
-function parseSave(json) {
-  try {
-    const s = JSON.parse(json);
-    if (s && typeof s.meat === 'number' && s.econ !== 2) {
-      s.meat *= 10;
-      s.earned *= 10;
-      s.grain = (s.grain || 0) * 5;
-      if (s.life) s.life.earned *= 10;
-      s.econ = 2;
-    }
-    if (s && typeof s.meat === 'number') return {...fresh(), tut: s.earned > 100 || s.valley ? TUT_DONE : 0, life: {taps: s.taps || 0, earned: s.earned || 0, mammoths: s.mammoths || 0, tigers: s.tigers || 0, migrations: s.valley || 0}, ...s};
-  } catch {}
-  return null;
-}
-
-/** @returns {State} */
-function load() {
-  try { return parseSave(localStorage.getItem(SAVE_KEY)) || fresh(); } catch { return fresh(); }
-}
-
-let syncAt = 0;
-let remoteReady = false;
-let frozen = false;
-let pulling = false;
-
-function save() {
-  if (frozen) return;
-  state.savedAt = Date.now();
-  state.heat = heat;
-  const json = JSON.stringify(state);
-  try { localStorage.setItem(SAVE_KEY, json); } catch {}
-  if (!remoteReady || Date.now() - syncAt < CLOUD_EVERY) return;
-  syncAt = Date.now();
-  if (serverSaves) pushSave(json);
-  else if (json.length <= CLOUD_MAX) tg.CloudStorage.setItem(SAVE_KEY, json, () => {});
-}
-
-function saveNow() {
-  syncAt = 0;
-  save();
-}
-
-/** @param {State} a @param {State} b @returns {boolean} */
-const ahead = (a, b) => a.restarts !== b.restarts ? a.restarts > b.restarts : a.life.migrations !== b.life.migrations ? a.life.migrations > b.life.migrations : a.life.earned > b.life.earned;
-
-/** @param {string} json @param {number} away */
-function adopt(json, away) {
-  const s = parseSave(json);
-  if (!s) return;
-  frozen = true;
-  s.savedAt = Date.now() - away;
-  try { localStorage.setItem(SAVE_KEY, JSON.stringify(s)); } catch {}
-  location.reload();
-}
-
-/** @param {string} json */
-function pushSave(json) {
-  fetch(SERVER + '/save', {method: 'POST', keepalive: true, body: JSON.stringify({initData: tg.initData, save: json})})
-    .then(r => r.ok ? r.json() : null)
-    .then(r => r && !r.ok && adopt(r.save, r.now - r.savedAt))
-    .catch(() => {});
-}
-
-/** @returns {Promise<string|null>} */
-const cloudSave = () => new Promise(done => tgAt('6.9') ? tg.CloudStorage.getItem(SAVE_KEY, (/** @type {any} */ err, /** @type {string} */ json) => done(err ? null : json || null)) : done(null));
-
-function pullCloud() {
-  if (!tgAt('6.9')) return;
-  cloudSave().then(json => {
-    remoteReady = true;
-    const cloud = json ? parseSave(json) : null;
-    if (cloud && ahead(cloud, state)) return adopt(json, Date.now() - cloud.savedAt);
-    saveNow();
-  });
-}
-
-async function pullServer() {
-  if (pulling) return;
-  pulling = true;
-  /** @type {{save:string|null,savedAt:number,now:number}|null} */
-  let r = null;
-  try { r = await ask('/load'); } catch {}
-  pulling = false;
-  if (!r) return welcomeBack(state.savedAt);
-  remoteReady = true;
-  const server = r.save ? parseSave(r.save) : null;
-  if (server && ahead(server, state)) return adopt(r.save, r.now - r.savedAt);
-  if (!server) {
-    const json = await cloudSave(), cloud = json ? parseSave(json) : null;
-    if (cloud && ahead(cloud, state)) {
-      await ask('/save', {save: json}).catch(() => {});
-      return adopt(json, Date.now() - cloud.savedAt);
-    }
-  }
-  welcomeBack(server ? Date.now() - Math.min(Date.now() - state.savedAt, r.now - r.savedAt) : state.savedAt);
-  saveNow();
-}
-
-const pull = () => serverSaves ? pullServer() : pullCloud();
-
 /** @type {State} */
 let state = load();
 let heat = 0;
 let night = 0;
+let fedNow = 1;
+/** @type {World} */
+const world = {get state() { return state; }, get heat() { return heat; }, get fed() { return fedNow; }, get now() { return Date.now(); }};
+const buzz = buzzer(world);
+const {save, saveNow, pull, pullServer, pullCloud} = createSaves(world, welcomeBack);
+const sound = createSound(world);
+const {beep, tune} = sound;
 
-/** @param {string} id @returns {number} */
-const lvl = id => state.levels[id] || 0;
-/** @param {string} id @returns {number} */
-const ranked = id => lvl(id) + ALL.filter(d => d.from === id).reduce((sum, d) => sum + ranked(d.id), 0);
-/** @param {string} id @returns {number} */
-const mult = id => MILESTONE_BOOST ** Math.floor(ranked(id) / MILESTONE);
 /** @returns {string} */
 const boostText = () => `+${pct(MILESTONE_BOOST - 1)}%`;
-/** @param {string} id @returns {boolean} */
-const has = id => state.techs.includes(id);
-/** @param {Def} def @returns {number} */
-const techMult = def => def.tech && has(def.tech) ? 1.34 : 1;
-/** @returns {number} */
-const legacy = () => 1 + up(((7 / 6) ** state.valley - 1) * 100) / 100;
-/** @returns {number} */
-const live = () => 1 + up(heat * .3) / 100;
-/** @param {Def} def @returns {boolean} */
-const milestones = def => def.id === 'fire' || Boolean(def.trip) || Boolean(def.feed);
-/** @returns {number} */
-const seats = () => 2 + lvl('cave');
-/** @returns {number} */
-const cap = () => Math.floor(2500 * 1.267 ** lvl('storage'));
-/** @returns {number} */
-const staff = () => WORKERS.reduce((sum, w) => sum + lvl(w.id), 0);
-/** @returns {number} */
-const speed = () => (1 + up(5 / 3 * lvl('bath')) / 100) * (has('drums') ? 1.07 : 1) * (boostOn('speed') ? 2 : 1);
-/** @returns {number} */
-const hype = () => boostOn('hunt') ? 2 : 1;
-/** @returns {number} */
-const cook = () => 1 + up(10 / 3 * lvl('kitchen') * (has('salt') ? 7 / 6 : 1)) / 100;
-/** @returns {boolean} */
-const isScared = () => Date.now() < state.scaredUntil;
-/** @param {string} id @param {boolean} [scared] @returns {number} */
-const hurt = (id, scared = isScared()) => scared ? state.injured[id] || 0 : 0;
-/** @returns {number} */
-const perTap = () => up((30 + 10 * lvl('fire')) / 9 * mult('fire') * techMult(STATIONS[0]) * legacy() * bless() * live() * hype() * (boostOn('feast') ? 5 : 1) * (isScared() ? .2 : 1));
-/** @param {Def} def @param {boolean} [scared] @returns {number} */
-const rateOf = (def, scared = isScared()) => up((lvl(def.id) - hurt(def.id, scared)) * def.trip / def.time * speed() * cook() * mult(def.id) * techMult(def) * legacy() * bless() * live() * hype() * (scared ? .2 : 1));
-/** @returns {number} */
-const pens = () => 2 * lvl('barn');
-/** @returns {number} */
-const herd = () => ANIMALS.reduce((sum, a) => sum + lvl(a.id), 0);
-/** @returns {number} */
-const grainRate = () => up(300 * lvl('field') * (has('sickle') ? 1.34 : 1) * (boostOn('grain') ? 3 : 1));
-/** @returns {number} */
-const harvestSize = () => grainRate() * HARVEST / 60;
-/** @returns {number} */
-const grainNeed = () => up(ANIMALS.reduce((sum, a) => sum + lvl(a.id) * a.feed * 60, 0));
-/** @returns {number} */
-const grainCap = () => 1500 * (1 + lvl('granary'));
-/** @returns {number} */
-const steadyFed = () => grainNeed() ? Math.min(1, grainRate() / grainNeed()) : 1;
-let fedNow = 1;
-/** @param {Def} def @param {number} [fed] @param {boolean} [scared] @returns {number} */
-const animalRate = (def, fed = fedNow, scared = isScared()) => up(lvl(def.id) * def.meat * fed * mult(def.id) * (has('fence') ? 1.34 : 1) * legacy() * bless() * hype() * (scared ? .2 : 1));
-/** @param {boolean} [scared] @param {number} [fed] @returns {number} */
-const perSec = (scared = isScared(), fed = fedNow) => WORKERS.reduce((sum, w) => sum + rateOf(w, scared), 0) + ANIMALS.reduce((sum, a) => sum + animalRate(a, fed, scared), 0);
-/** @param {Def} def @param {number} n @returns {number} */
-const costOf = (def, n) => up(def.base * def.growth ** lvl(def.id) * (def.growth ** n - 1) / (def.growth - 1));
-/** @param {Tech} tech @returns {boolean} */
-const unlocked = tech => lvl(tech.need[0]) >= tech.need[1];
 /** @returns {Valley} */
 const theme = () => VALLEYS[state.valley % VALLEYS.length];
 /** @returns {string} */
@@ -257,63 +74,20 @@ const treeKind = () => theme().extra === 'sea' ? 'palm' : 'pine';
 const valleyName = v => VALLEYS[v % VALLEYS.length].name + (v >= VALLEYS.length ? ` ${Math.floor(v / VALLEYS.length) + 1}` : '');
 
 let lastFull = 0;
-/** @param {number} n @returns {number} */
-function gain(n) {
-  const got = Math.min(n, Math.max(0, cap() - state.meat));
-  state.meat += got;
-  state.earned += got;
-  state.life.earned += got;
+/** @param {number} got @param {number} n */
+function overflow(got, n) {
   const now = performance.now();
   if (got < n && now - lastFull > 1500) {
     lastFull = now;
     beep(140, .12, 'square', .04);
   }
+}
+
+/** @param {number} n @returns {number} */
+function gain(n) {
+  const got = addMeat(world, n);
+  overflow(got, n);
   return got;
-}
-
-/** @param {string} kind @param {number} goal @returns {Quest} */
-function questOf(kind, goal) {
-  const def = ALL.find(d => d.id === kind);
-  if (def) return {goal, now: lvl(kind), text: def.trip ? `${def.name}: ${goal} в племени` : def.feed ? `${def.name}: ${goal} в хлеву` : `${def.name} до ур. ${goal}`};
-  if (kind === 'tribe') return {goal, now: staff(), text: `Рабочих в племени: ${goal}`};
-  if (kind === 'herd') return {goal, now: herd(), text: `Голов скотины: ${goal}`};
-  if (kind === 'taps') return {goal, now: state.taps, text: `Поохотиться ${goal} раз`};
-  if (kind === 'earned') return {goal, now: state.earned, text: `Добыть ${num(goal)} мяса`};
-  if (kind === 'mammoths') return {goal, now: state.mammoths, text: `Поймать мамонтов: ${goal}`};
-  if (kind === 'techs') return {goal, now: state.techs.length, text: `Сделать открытий: ${goal}`};
-  if (kind === 'heat') return {goal, now: state.peakHeat, text: `Разжечь костёр до ${goal}%`};
-  return {goal, now: state.tigers, text: `Прогнать тигров: ${goal}`};
-}
-
-/** @param {string} kind @param {number} s @param {number} g @returns {number} */
-function genericGoal(kind, s, g) {
-  if (GOALS[kind]) {
-    const [from, start, step] = GOALS[kind];
-    return Math.round((start + Math.floor((s - from) * step)) * (1 + g / 2));
-  }
-  if (kind === 'taps') return Math.round(30 * (1 + s / 2) * (1 + g / 2));
-  if (kind === 'earned') return Math.round(3000 * 1.5 ** s * 2.5 ** g);
-  if (kind === 'mammoths') return 1 + Math.floor(s / 5) + g;
-  if (kind === 'techs') return Math.min(TECHS.length, 1 + Math.floor(s / 4));
-  return 1 + Math.floor(s / 10) + g;
-}
-
-/** @returns {number} */
-const stageCount = () => CHAPTERS[state.valley]?.stages.length ?? GENERIC_STAGES;
-
-/** @returns {Quest[]} */
-function quests() {
-  const s = state.stage, v = state.valley, chapter = CHAPTERS[v];
-  if (s >= stageCount()) return [];
-  if (chapter) return chapter.stages[s].map(([kind, goal]) => questOf(kind, goal));
-  const g = v - CHAPTERS.length, pool = Object.keys(GOALS).filter(id => GOALS[id][0] <= s);
-  return [pool[s % pool.length], pool[(s + (pool.length >> 1)) % pool.length], EXTRAS[s % EXTRAS.length]].map(kind => questOf(kind, genericGoal(kind, s, g)));
-}
-
-/** @param {Def} def @returns {number} */
-function amount(def) {
-  const room = def.from ? lvl(def.from) : def.trip ? seats() - staff() : def.feed ? pens() - herd() : Infinity;
-  return Math.min(1, room);
 }
 
 /** @param {HTMLButtonElement} btn @param {() => boolean} act */
@@ -344,214 +118,6 @@ function holdable(btn, act) {
   });
   btn.addEventListener('contextmenu', e => e.preventDefault());
 }
-
-/** @type {AudioContext|undefined} */
-let audio;
-/** @param {number} freq @param {number} dur @param {OscillatorType} [type] @param {number} [vol] */
-function beep(freq, dur, type = 'square', vol = .05) {
-  if (state.muted) return;
-  try {
-    audio ??= new AudioContext();
-    const o = audio.createOscillator(), g = audio.createGain();
-    o.type = type;
-    o.frequency.value = freq;
-    g.gain.setValueAtTime(vol, audio.currentTime);
-    g.gain.exponentialRampToValueAtTime(.001, audio.currentTime + dur);
-    o.connect(g).connect(audio.destination);
-    o.start();
-    o.stop(audio.currentTime + dur);
-  } catch {}
-}
-
-/** @param {number[]} notes @param {number} gap */
-const tune = (notes, gap) => notes.forEach((f, i) => setTimeout(() => beep(f, .14), i * gap));
-
-const STEP = 60 / 96 / 4;
-const PENTA = [146.83, 174.61, 196, 220, 261.63, 293.66, 349.23, 392, 440, 523.25];
-const MOTIFS = [[4, 5, 4, 3, 2], [2, 3, 4, 6, 5, 4], [7, 6, 4, 5, 4], [4, 4, 3, 2, 0], [5, 7, 8, 7, 5, 4], [2, 4, 5, 4, 2, 3], [6, 5, 4, 2, 3, 2]];
-/** @type {{bus:GainNode,noise:AudioBuffer,drone:{stop:() => void}|null}|null} */
-let band = null;
-let nextStep = 0, stepNo = 0;
-
-/** @returns {{bus:GainNode,noise:AudioBuffer,drone:null}} */
-function setupBand() {
-  const bus = audio.createGain(), verb = audio.createConvolver(), wet = audio.createGain();
-  const len = audio.sampleRate * 2.6, imp = audio.createBuffer(2, len, audio.sampleRate);
-  for (let ch = 0; ch < 2; ch++) {
-    const d = imp.getChannelData(ch);
-    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len) ** 2.5;
-  }
-  verb.buffer = imp;
-  bus.gain.value = .8;
-  wet.gain.value = .35;
-  bus.connect(audio.destination);
-  bus.connect(verb).connect(wet).connect(audio.destination);
-  const noise = audio.createBuffer(1, audio.sampleRate, audio.sampleRate), nd = noise.getChannelData(0);
-  for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
-  return {bus, noise, drone: null};
-}
-
-/** @param {AudioNode} node @param {number} pan */
-function out(node, pan) {
-  const p = audio.createStereoPanner();
-  p.pan.value = pan;
-  node.connect(p).connect(band.bus);
-}
-
-/** @param {number} at @param {number} freq @param {number} vol @param {number} len @param {number} pan @param {BiquadFilterType} [type] @param {number} [q] */
-function hiss(at, freq, vol, len, pan, type = 'highpass', q = .7) {
-  const s = audio.createBufferSource(), f = audio.createBiquadFilter(), g = audio.createGain();
-  s.buffer = band.noise;
-  f.type = type;
-  f.frequency.value = freq;
-  f.Q.value = q;
-  g.gain.setValueAtTime(vol, at);
-  g.gain.exponentialRampToValueAtTime(.0001, at + len);
-  s.connect(f).connect(g);
-  out(g, pan);
-  s.start(at, Math.random() * .5);
-  s.stop(at + len + .02);
-}
-
-/** @param {number} at @param {number} freq @param {number} vol @param {number} pan @param {boolean} slap */
-function drum(at, freq, vol, pan, slap) {
-  const o = audio.createOscillator(), g = audio.createGain();
-  o.frequency.setValueAtTime(freq * 1.6, at);
-  o.frequency.exponentialRampToValueAtTime(freq, at + .04);
-  o.frequency.exponentialRampToValueAtTime(freq * .8, at + .4);
-  g.gain.setValueAtTime(vol, at);
-  g.gain.exponentialRampToValueAtTime(.0001, at + (slap ? .18 : .45));
-  o.connect(g);
-  out(g, pan);
-  o.start(at);
-  o.stop(at + .5);
-  hiss(at, slap ? 1400 : 500, vol * (slap ? .9 : .35), slap ? .09 : .05, pan, 'bandpass', 1.2);
-}
-
-/** @param {number} at @param {number} vol @param {number} pan */
-function clave(at, vol, pan) {
-  for (const [freq, v] of [[1750, 1], [2600, .4]]) {
-    const o = audio.createOscillator(), g = audio.createGain();
-    o.frequency.value = freq;
-    g.gain.setValueAtTime(vol * v, at);
-    g.gain.exponentialRampToValueAtTime(.0001, at + .07);
-    o.connect(g);
-    out(g, pan);
-    o.start(at);
-    o.stop(at + .08);
-  }
-}
-
-/** @param {number} at @param {number} freq @param {number} dur @param {number} vol @param {number} [from] */
-function blow(at, freq, dur, vol, from = freq) {
-  const o = audio.createOscillator(), o2 = audio.createOscillator(), lfo = audio.createOscillator();
-  const depth = audio.createGain(), soft = audio.createGain(), f = audio.createBiquadFilter(), g = audio.createGain();
-  o.frequency.setValueAtTime(from, at);
-  o.frequency.exponentialRampToValueAtTime(freq, at + .09);
-  o2.type = 'triangle';
-  o2.frequency.setValueAtTime(from * 2, at);
-  o2.frequency.exponentialRampToValueAtTime(freq * 2, at + .09);
-  lfo.frequency.value = 5.2;
-  depth.gain.setValueAtTime(0, at);
-  depth.gain.linearRampToValueAtTime(freq * .015, at + Math.min(.4, dur * .6));
-  lfo.connect(depth);
-  depth.connect(o.frequency);
-  depth.connect(o2.frequency);
-  soft.gain.value = .1;
-  o2.connect(soft).connect(f);
-  o.connect(f);
-  f.type = 'lowpass';
-  f.frequency.value = freq * 4;
-  g.gain.setValueAtTime(.0001, at);
-  g.gain.exponentialRampToValueAtTime(vol, at + .08);
-  g.gain.setValueAtTime(vol, at + dur * .7);
-  g.gain.exponentialRampToValueAtTime(.0001, at + dur);
-  f.connect(g);
-  out(g, -.2);
-  hiss(at, freq * 2, vol * .6, Math.min(dur, .22), -.2, 'bandpass', 5);
-  for (const n of [o, o2, lfo]) {
-    n.start(at);
-    n.stop(at + dur + .05);
-  }
-}
-
-function startDrone() {
-  if (band.drone) return;
-  const o = audio.createOscillator(), o2 = audio.createOscillator(), f = audio.createBiquadFilter(), lfo = audio.createOscillator(), depth = audio.createGain(), g = audio.createGain();
-  o.type = o2.type = 'sawtooth';
-  o.frequency.value = 73.42;
-  o2.frequency.value = 73.42 * 1.006;
-  f.type = 'bandpass';
-  f.frequency.value = 480;
-  f.Q.value = 4;
-  lfo.frequency.value = .35;
-  depth.gain.value = 280;
-  lfo.connect(depth).connect(f.frequency);
-  g.gain.setValueAtTime(.0001, audio.currentTime);
-  g.gain.exponentialRampToValueAtTime(.06, audio.currentTime + 3);
-  o.connect(f);
-  o2.connect(f);
-  f.connect(g);
-  out(g, 0);
-  for (const n of [o, o2, lfo]) n.start();
-  band.drone = {stop: () => {
-    g.gain.setTargetAtTime(.0001, audio.currentTime, .4);
-    for (const n of [o, o2, lfo]) n.stop(audio.currentTime + 2.5);
-  }};
-}
-
-function stopDrone() {
-  band?.drone?.stop();
-  if (band) band.drone = null;
-}
-
-/** @param {number} at */
-function phrase(at) {
-  const motif = MOTIFS[Math.floor(Math.random() * MOTIFS.length)], lift = Math.random() < .3 ? 2 : 0;
-  let pos = 0, prev = 0;
-  for (const n of motif) {
-    const len = [2, 2, 3, 4, 4, 6][Math.floor(Math.random() * 6)], freq = PENTA[Math.min(PENTA.length - 1, n + lift)] * 2;
-    if (pos + len > 30) break;
-    blow(at + pos * STEP, freq, len * STEP * 1.15, .05, prev && Math.random() < .35 ? prev : freq);
-    prev = freq;
-    pos += len;
-  }
-}
-
-/** @param {number} s @param {number} at */
-function playStep(s, at) {
-  const bar = Math.floor(s / 16), beat = s % 16, part = bar < 2 ? 'intro' : bar < 6 ? 'theme' : bar < 7 ? 'sticks' : 'rest';
-  const t = at + (beat % 2 ? STEP * .16 : 0) + (Math.random() - .5) * .008;
-  if (part !== 'rest') {
-    if (beat === 0 || beat === 10) drum(t, 68, .5, -.1, false);
-    if (beat === 7 && Math.random() < .6) drum(t, 68, .3, -.1, false);
-    if (beat === 4 || beat === 12) drum(t, 190, .28, .25, true);
-    if (beat % 2 && Math.random() < .3) drum(t, 190, .06, .3, true);
-    hiss(t, 8000, beat % 4 === 2 ? .05 : .02, .05, .4);
-  } else if (beat === 0) drum(t, 60, .5, 0, false);
-  if (part === 'sticks' && [0, 3, 6, 10, 12].includes(beat)) clave(t, .07, -.45);
-  if ((part === 'theme' || part === 'sticks') && beat === 0 && bar % 2 === 0) phrase(t);
-}
-
-function musicTick() {
-  if (!audio || document.hidden || audio.state !== 'running') return;
-  band ??= setupBand();
-  if (!state.music) return stopDrone();
-  startDrone();
-  if (nextStep <= audio.currentTime) nextStep = audio.currentTime + .05;
-  while (nextStep < audio.currentTime + .2) {
-    playStep(stepNo, nextStep);
-    nextStep += STEP;
-    stepNo = (stepNo + 1) % 128;
-  }
-}
-setInterval(musicTick, 50);
-document.addEventListener('pointerdown', () => {
-  try {
-    audio ??= new AudioContext();
-    if (audio.state === 'suspended') audio.resume();
-  } catch {}
-});
 
 let lastBump = 0;
 function bump() {
@@ -625,7 +191,7 @@ function farmBox() {
 /** @returns {[number, number][]} */
 function cropSpots() {
   const b = farmBox(), cols = 4, rows = Math.max(1, Math.floor((b.y1 - b.y0 - 20 * U) / (30 * U)));
-  return Array.from({length: Math.min(cols * rows, lvl('field') * 2)}, (_, i) => [b.fx0 + (b.fx1 - b.fx0) * ((i % cols) + .5) / cols, b.y0 + 34 * U + Math.floor(i / cols) * 30 * U]);
+  return Array.from({length: Math.min(cols * rows, lvl(world, 'field') * 2)}, (_, i) => [b.fx0 + (b.fx1 - b.fx0) * ((i % cols) + .5) / cols, b.y0 + 34 * U + Math.floor(i / cols) * 30 * U]);
 }
 
 /** @param {number} n @returns {number[]} */
@@ -789,7 +355,7 @@ function drawGranary(x, y) {
 
 function syncCritters() {
   for (const def of ANIMALS) {
-    const want = Math.min(lvl(def.id), 6);
+    const want = Math.min(lvl(world, def.id), 6);
     const mine = critters.filter(c => c.def === def);
     for (let i = mine.length; i < want; i++) critters.push({def, xf: Math.random(), yf: .3 + Math.random() * .7, vx: (Math.random() - .5) * .2, step: Math.random() * 6});
     if (mine.length > want) critters = critters.filter(c => c.def !== def).concat(mine.slice(0, want));
@@ -798,18 +364,10 @@ function syncCritters() {
 
 /** @param {number} dt */
 function farmTick(dt) {
-  if (!lvl('field')) state.harvest = HARVEST;
-  else if ((state.harvest += dt) >= HARVEST) {
-    state.harvest = 0;
-    const got = Math.max(0, Math.min(harvestSize(), grainCap() - state.grain)), b = farmBox();
-    state.grain += got;
-    if (got > 0) floater((b.fx0 + b.fx1) / 2, b.y0 + 10 * U, `+${num(got)} пшена`, '#FFCC4D', 14);
-  }
-  const need = grainNeed() / 60 * dt;
-  const eaten = Math.min(state.grain, need);
-  state.grain -= eaten;
-  fedNow = need > 0 ? eaten / need : 1;
-  farmAcc += ANIMALS.reduce((sum, a) => sum + animalRate(a), 0) * dt;
+  const {harvested, fed} = farmStep(world, dt), fb = farmBox();
+  if (harvested > 0) floater((fb.fx0 + fb.fx1) / 2, fb.y0 + 10 * U, `+${num(harvested)} пшена`, '#FFCC4D', 14);
+  fedNow = fed;
+  farmAcc += ANIMALS.reduce((sum, a) => sum + animalRate(world, a), 0) * dt;
   farmT += dt;
   if (farmT >= 2) {
     farmT = 0;
@@ -857,9 +415,8 @@ function fly(x, y, n) {
 
 /** @param {number} x @param {number} y */
 function hunt(x, y) {
-  const n = gain(perTap());
-  state.taps++;
-  state.life.taps++;
+  const n = gain(perTap(world));
+  tapped(world);
   if (n > 0) {
     floater(x, y - 10, '+' + num(n), '#ffd08a');
     fly(x, y, 2);
@@ -870,11 +427,9 @@ function hunt(x, y) {
 }
 
 function catchMammoth() {
-  const n = gain(up(Math.max(170 * legacy(), perSec() * 5 + perTap() * 10 / 3)));
+  const n = gain(mammothMeat(world));
   const x = mammoth.xf * W, y = mammoth.lane * H - 30 * U;
-  state.mammoths++;
-  state.life.mammoths++;
-  state.mammothRest = Date.now() + MAMMOTH_REST * 1000;
+  caughtMammoth(world);
   Object.assign(mammoth, {fleeing: true, caught: true, phase: 'run', fall: 0, lift: 0, stuck: 0, spears: [], crew: CREW.map(([ox, oy], i) => ({xf: CAVE, yf: .76, tx: Math.min(.97, Math.max(.05, mammoth.xf + ox)), ty: mammoth.lane + oy, dx: 0, delay: i * .18, step: 0, dir: 1, throws: 2, cool: i * .12, color: CREW_COLORS[i], moving: false}))});
   floater(x, y - 30 * U, `Мамонт! +${num(n)}`, '#ffd08a', 22);
   burst(x, y, 30, '#ffd08a');
@@ -885,8 +440,7 @@ function catchMammoth() {
 }
 
 function stoke() {
-  heat = Math.min(100, heat + 7);
-  state.peakHeat = Math.max(state.peakHeat, Math.round(heat));
+  heat = stokeHeat(world);
   const f = spotOf('fire');
   burst(f.x, f.y - 20 * U, 8, '#ffa424');
   floater(f.x, f.y - 55 * U, `Жар ${Math.round(heat)}%`, '#ffa424', 13);
@@ -897,8 +451,7 @@ function stoke() {
 /** @param {string} text */
 function scare(text) {
   tiger.fleeing = true;
-  state.tigers++;
-  state.life.tigers++;
+  tigerScared(world);
   floater(tiger.xf * W, tiger.lane * H - 50 * U, text, '#ffd08a', 16);
   burst(tiger.xf * W, tiger.lane * H - 20 * U, 20, '#ffa424');
   tune([440, 587], 90);
@@ -915,16 +468,14 @@ function hitTiger() {
 
 /** @param {Tech} tech */
 function buyTech(tech) {
-  if (has(tech.id) || !unlocked(tech) || state.meat < tech.cost) return;
-  state.meat -= tech.cost;
-  state.techs.push(tech.id);
+  if (!purchaseTech(world, tech)) return;
   celebrate(`Открытие: ${tech.name}!`);
   renderList();
 }
 
 /** @param {Tech} tech @returns {string} */
 function needText(tech) {
-  const [id, n] = tech.need, def = ALL.find(d => d.id === id), now = lvl(id);
+  const [id, n] = tech.need, def = ALL.find(d => d.id === id), now = lvl(world, id);
   return `Нужно: ${def.name} ${def.trip ? '×' : 'ур. '}${n}` + (now < n ? `, есть ${now}` : '');
 }
 
@@ -947,20 +498,13 @@ function celebrate(text) {
 
 /** @param {Def} def @returns {boolean} */
 function buy(def) {
-  const n = amount(def), c = costOf(def, n);
-  if (n < 1 || state.meat < c) return false;
-  const before = lvl(def.id), rank = ranked(def.id);
-  state.meat -= c;
-  state.levels[def.id] = before + n;
-  if (def.from) {
-    state.levels[def.from] -= n;
-    state.injured[def.from] = Math.min(state.injured[def.from] || 0, lvl(def.from));
-  }
+  const rank = ranked(world, def.id);
+  if (!purchase(world, def)) return false;
   beep(520, .08);
   setTimeout(() => beep(780, .1), 70);
   const spot = spotOf(def.id);
   burst(spot.x, spot.y - 20 * U, 18, '#ffd08a');
-  if (milestones(def) && Math.floor(rank / MILESTONE) < Math.floor(ranked(def.id) / MILESTONE)) celebrate(def.id === 'fire' ? `Костёр: тап ${boostText()}!` : `${def.name}: добыча ${boostText()}!`);
+  if (milestones(def) && Math.floor(rank / MILESTONE) < Math.floor(ranked(world, def.id) / MILESTONE)) celebrate(def.id === 'fire' ? `Костёр: тап ${boostText()}!` : `${def.name}: добыча ${boostText()}!`);
   renderList();
   return true;
 }
@@ -979,29 +523,25 @@ function modal(text, big, ok, action, cancel = false, code = '1f356') {
 }
 
 function claimStage() {
-  if (!quests().every(q => q.now >= q.goal)) return;
-  state.stage++;
-  const reward = gain(up(Math.max(perSec() * 20, 330 * state.stage * 2.5 ** state.valley)));
+  const want = advanceStage(world);
+  if (want === null) return;
+  const reward = gain(want);
   fly(W / 2, H / 2, 20);
   celebrate(`Веха пройдена! +${num(reward)} мяса`);
   bump();
   renderList();
 }
 
-/** @returns {number} */
-const shellReward = () => Math.min(MAX_SHELL_REWARD, 2 + Math.floor(state.valley / 2));
-
 function askMigrate() {
   const next = CHAPTERS[state.valley + 1];
-  modal(`Племя уходит в новые земли: ${valleyName(state.valley + 1)}. Мясо, постройки, рабочие и открытия останутся здесь, зато мудрость предков навсегда прибавит к добыче 17%, а в пути племя найдёт ${plural(shellReward(), ['ракушку', 'ракушки', 'ракушек'])}.` + (next ? ` Там племя освоит новое: ${next.title.toLowerCase()}.` : ''), `Добыча +${pct((7 / 6) ** (state.valley + 1) - 1)}%`, 'Переселиться', migrate, true, '1f5fa');
+  modal(`Племя уходит в новые земли: ${valleyName(state.valley + 1)}. Мясо, постройки, рабочие и открытия останутся здесь, зато мудрость предков навсегда прибавит к добыче 17%, а в пути племя найдёт ${plural(shellReward(world), ['ракушку', 'ракушки', 'ракушек'])}.` + (next ? ` Там племя освоит новое: ${next.title.toLowerCase()}.` : ''), `Добыча +${pct((7 / 6) ** (state.valley + 1) - 1)}%`, 'Переселиться', migrate, true, '1f5fa');
 }
 
 function migrate() {
   $('fade').classList.add('show');
   tune([330, 294, 262], 150);
   setTimeout(() => {
-    const keep = {muted: state.muted, music: state.music, noBuzz: state.noBuzz, noTut: state.noTut, shells: state.shells + shellReward(), boosts: state.boosts, perks: state.perks, mammothRest: state.mammothRest, tiers: state.tiers, blessUntil: state.blessUntil, blessDay: state.blessDay, restarts: state.restarts, life: {...state.life, migrations: state.life.migrations + 1}};
-    state = {...fresh(), ...keep, valley: state.valley + 1, tut: state.noTut ? TUT_DONE : 0};
+    state = migrated(world);
     walkers = [];
     critters = [];
     particles = [];
@@ -1037,7 +577,7 @@ function openSheet(sec) {
 
 function syncWalkers() {
   for (const def of WORKERS) {
-    const want = Math.min(lvl(def.id) - hurt(def.id), MAX_WALKERS);
+    const want = Math.min(lvl(world, def.id) - hurt(world, def.id), MAX_WALKERS);
     const mine = walkers.filter(w => w.def === def);
     for (let i = mine.length; i < want; i++) {
       walkers.push({def, xf: CAVE, lane: .76 + Math.random() * .2, dir: 1, wait: Math.random() * def.time, carry: false, step: 0});
@@ -1050,7 +590,7 @@ function syncWalkers() {
 let lastTick = 0;
 /** @param {Walker} w */
 function deliver(w) {
-  const n = up(rateOf(w.def) * w.def.time / speed() / walkers.filter(o => o.def === w.def).length);
+  const n = up(rateOf(world, w.def) * w.def.time / speed(world) / walkers.filter(o => o.def === w.def).length);
   gain(n);
   const now = performance.now();
   if (now - lastTick > 300) {
@@ -1067,14 +607,14 @@ function moveWalker(w, dt) {
     w.wait -= dt;
     return;
   }
-  const v = 2 * (FOREST - CAVE) * speed() / (w.def.time - .5);
+  const v = 2 * (FOREST - CAVE) * speed(world) / (w.def.time - .5);
   w.xf += w.dir * v * dt;
-  w.step += dt * 7 * speed();
+  w.step += dt * 7 * speed(world);
   if (w.dir > 0 && w.xf >= FOREST) {
     w.xf = FOREST;
     w.dir = -1;
     w.carry = true;
-    w.wait = .5 / speed();
+    w.wait = .5 / speed(world);
   } else if (w.dir < 0 && w.xf <= CAVE) {
     w.xf = CAVE;
     w.dir = 1;
@@ -1084,7 +624,7 @@ function moveWalker(w, dt) {
 }
 
 /** @returns {number} */
-const nextMammoth = () => (45 + Math.random() * 60) / (has('paint') ? 2 : 1);
+const nextMammoth = () => (45 + Math.random() * 60) / (has(world, 'paint') ? 2 : 1);
 
 /** @param {number} dt */
 function huntTick(dt) {
@@ -1171,7 +711,7 @@ function update(dt) {
   }
   if (!mammoth) {
     mammothIn -= dt;
-    if (mammothIn <= 0 && opened('mammoth') && Date.now() >= state.mammothRest) mammoth = {xf: -.15, lane: .86, fleeing: false, step: 0};
+    if (mammothIn <= 0 && opened(world, 'mammoth') && Date.now() >= state.mammothRest) mammoth = {xf: -.15, lane: .86, fleeing: false, step: 0};
   } else if (mammoth.caught) huntTick(dt);
   else {
     mammoth.xf += (mammoth.fleeing ? .45 : .07) * dt;
@@ -1181,24 +721,20 @@ function update(dt) {
       mammothIn = nextMammoth();
     }
   }
-  heat = boostOn('feast') ? 100 : Math.max(0, heat - dt * (1 + night * 1.5) / 5 * (has('flint') ? .5 : 1));
-  if (perkOn('keeper') && night < .5) heat = Math.max(heat, KEEPER_HEAT);
+  heat = heatTick(world, dt, night);
   if (!tiger) {
-    if (!document.hidden && night > .6 && heat < 25 && state.earned > 10000 && opened('tiger') && !boostOn('ward')) {
-      tigerIn -= dt * (isScared() ? .5 : 1);
+    if (!document.hidden && night > .6 && heat < 25 && state.earned > 10000 && opened(world, 'tiger') && !boostOn(world, 'ward')) {
+      tigerIn -= dt * (isScared(world) ? .5 : 1);
       if (tigerIn <= 0) tiger = {xf: 1.1, lane: .82, hp: 3, fleeing: false, step: 0, shake: 0};
     }
   } else if (!document.hidden) {
     tiger.shake = Math.max(0, tiger.shake - dt);
     if (!tiger.fleeing && heat >= 60) scare('Огонь отпугнул тигра!');
-    const calm = isScared() ? .5 : 1;
+    const calm = isScared(world) ? .5 : 1;
     tiger.xf += (tiger.fleeing ? .5 : -.06 * calm) * dt;
     tiger.step += dt * (tiger.fleeing ? 14 : 6 * calm);
     if (!tiger.fleeing && tiger.xf <= CAVE + .06) {
-      const loss = state.meat * .8;
-      state.meat -= loss;
-      state.scaredUntil = Date.now() + 30 * 60e3;
-      state.injured = Object.fromEntries(WORKERS.map(w => [w.id, Math.floor(lvl(w.id) / 2)]));
+      const loss = raid(world);
       tiger.fleeing = true;
       floater(tiger.xf * W + 40 * U, tiger.lane * H - 50 * U, `−${num(loss)} мяса`, '#ff8a6a', 18);
       banner('Тигр утащил 80% мяса и покалечил полплемени!', '1f631');
@@ -1218,7 +754,7 @@ function update(dt) {
     particles.push({kind: 'smoke', x: f.x, y: f.y - 22 * U, vx: (Math.random() - .5) * 10, vy: -22 * U, life: 2.2, max: 2.2, size: 4 * U, color: '#9a8f86'});
   }
   steamT -= dt;
-  if (steamT < 0 && lvl('bath')) {
+  if (steamT < 0 && lvl(world, 'bath')) {
     steamT = .3;
     const b = spotOf('bath');
     particles.push({kind: 'smoke', x: b.x + 8 * U, y: b.y - 46 * U, vx: (Math.random() - .5) * 12, vy: -18 * U, life: 1.8, max: 1.8, size: 5 * U, color: '#ffffff'});
@@ -1405,7 +941,7 @@ function drawCave(night, t) {
   ctx.ellipse(.07 * W, .3 * H, 14 * U, 6 * U, -.3, 0, Math.PI * 2);
   ctx.ellipse(.19 * W, .48 * H, 10 * U, 5 * U, .5, 0, Math.PI * 2);
   ctx.fill();
-  const cx = CAVE * W, cy = .75 * H, cw = .075 * W, ch = .2 * H, l = lvl('cave');
+  const cx = CAVE * W, cy = .75 * H, cw = .075 * W, ch = .2 * H, l = lvl(world, 'cave');
   ctx.fillStyle = '#292F33';
   ctx.beginPath();
   ctx.ellipse(cx, cy, cw, ch, 0, Math.PI, 0);
@@ -1444,7 +980,7 @@ function drawCave(night, t) {
 
 /** @param {number} night @param {number} t */
 function drawStations(night, t) {
-  const f = spotOf('fire'), fl = lvl('fire'), lit = heat > 0, r = (20 + Math.min(fl, 30) * .6) * U * (.25 + heat / 100);
+  const f = spotOf('fire'), fl = lvl(world, 'fire'), lit = heat > 0, r = (20 + Math.min(fl, 30) * .6) * U * (.25 + heat / 100);
   if (lit) glow(f.x, f.y - r / 2, r * 3, (.2 + night * .35) * (.3 + heat / 100));
   for (let i = 0; i < 5; i++) {
     const a = Math.PI * (.05 + i * .225);
@@ -1457,8 +993,8 @@ function drawStations(night, t) {
   else if (fl) tag(f.x, f.y - r - 10 * U, `ур. ${fl}`);
   hits.push({id: 'fire', x: f.x, y: f.y - 14 * U, r: 30 * U});
 
-  const k = spotOf('kitchen'), kl = lvl('kitchen');
-  if (!opened('kitchen')) sprite('rock', k.x, k.y + 4 * U, 22 * U);
+  const k = spotOf('kitchen'), kl = lvl(world, 'kitchen');
+  if (!opened(world, 'kitchen')) sprite('rock', k.x, k.y + 4 * U, 22 * U);
   else if (!kl) sign(k.x, k.y, 'Кухня', t);
   else {
     for (let i = -2; i <= 2; i++) sprite('rock', k.x + i * 7 * U, k.y + 3 * U, 8 * U);
@@ -1481,18 +1017,18 @@ function drawStations(night, t) {
     spriteAt('meat', k.x, k.y - 27 * U, 26 * U, t * 1.5);
     tag(k.x, k.y - 50 * U, `Кухня, ур. ${kl}`);
   }
-  if (opened('kitchen')) hits.push({id: 'kitchen', x: k.x, y: k.y - 22 * U, r: 34 * U});
+  if (opened(world, 'kitchen')) hits.push({id: 'kitchen', x: k.x, y: k.y - 22 * U, r: 34 * U});
 
-  const st = spotOf('storage'), fill = Math.min(1, state.meat / cap());
+  const st = spotOf('storage'), fill = Math.min(1, state.meat / cap(world));
   const pile = [[-9, -25], [0, -26], [9, -25], [-5, -32], [5, -32], [0, -39]];
   sprite('basket', st.x, st.y + 4 * U, 40 * U);
   for (let i = 0; i < Math.ceil(fill * pile.length); i++) spriteAt('meat', st.x + pile[i][0] * U, st.y + pile[i][1] * U, 15 * U, (i % 2 ? .4 : -.4) + Math.sin(t * 2 + i) * .05);
   if (fill >= 1) bubble(st.x, st.y - 62 * U, 'Склад полон!', t, '#DD2E44');
-  else tag(st.x, st.y - 56 * U, `Склад, ур. ${lvl('storage')}`);
+  else tag(st.x, st.y - 56 * U, `Склад, ур. ${lvl(world, 'storage')}`);
   hits.push({id: 'storage', x: st.x, y: st.y - 20 * U, r: 30 * U});
 
-  const b = spotOf('bath'), bl = lvl('bath');
-  if (!opened('bath')) sprite(treeKind(), b.x, b.y + 4 * U, 40 * U);
+  const b = spotOf('bath'), bl = lvl(world, 'bath');
+  if (!opened(world, 'bath')) sprite(treeKind(), b.x, b.y + 4 * U, 40 * U);
   else if (!bl) sign(b.x, b.y, 'Баня', t);
   else {
     glow(b.x, b.y - 10 * U, 30 * U, .1 + night * .3);
@@ -1500,7 +1036,7 @@ function drawStations(night, t) {
     sprite('hotspring', b.x + 16 * U, b.y - 44 * U - Math.abs(Math.sin(t * 2)) * 3 * U, 18 * U);
     tag(b.x, b.y - 72 * U, `Баня, ур. ${bl}`);
   }
-  if (opened('bath')) hits.push({id: 'bath', x: b.x, y: b.y - 22 * U, r: 34 * U});
+  if (opened(world, 'bath')) hits.push({id: 'bath', x: b.x, y: b.y - 22 * U, r: 34 * U});
 }
 
 /** @param {Walker} w */
@@ -1681,7 +1217,7 @@ function folkDepth(t, farm) {
   const out = [];
   FOLK.forEach((f, i) => {
     if (Boolean(f.farm) !== farm) return;
-    if (!lvl(f.id)) {
+    if (!lvl(world, f.id)) {
       delete folkBorn[f.id];
       return;
     }
@@ -1776,8 +1312,8 @@ function drawMeadow(b, t) {
 
 /** @param {number} t */
 function drawFarm(t) {
-  const b = farmBox(), fl = lvl('field'), bl = lvl('barn');
-  if (!opened('field')) return drawMeadow(b, t);
+  const b = farmBox(), fl = lvl(world, 'field'), bl = lvl(world, 'barn');
+  if (!opened(world, 'field')) return drawMeadow(b, t);
   pill(b.fx0, b.y0, b.fx1 - b.fx0, b.y1 - b.y0, 14 * U, '#8A4B38');
   ctx.strokeStyle = 'rgba(102,33,19,.45)';
   ctx.lineWidth = 2 * U;
@@ -1787,7 +1323,7 @@ function drawFarm(t) {
     ctx.lineTo(b.fx1 - 8 * U, y);
   }
   ctx.stroke();
-  const [gx, gy] = granarySpot(), gl = lvl('granary');
+  const [gx, gy] = granarySpot(), gl = lvl(world, 'granary');
   if (gl) {
     drawGranary(gx, gy);
     tag(gx, gy - 50 * U, `Амбар, ур. ${gl}`);
@@ -1812,7 +1348,7 @@ function drawFarm(t) {
       ctx.globalAlpha = 1;
     });
     if (f.phase === 'stack' && f.stack > 0) drawStack(...stackSpot(), Math.min(1, f.stack));
-    tag((b.fx0 + b.fx1) / 2, b.y1 - 2 * U, `Пшено ${num(Math.floor(state.grain))} из ${num(grainCap())}`);
+    tag((b.fx0 + b.fx1) / 2, b.y1 - 2 * U, `Пшено ${num(Math.floor(state.grain))} из ${num(grainCap(world))}`);
     const scythe = f.carry ? undefined : f.mowing ? -1.6 + (1 - f.swing / .45) * 2.2 : -.5;
     drawPerson(f.xf * W, f.yf * FH, U * .78, f.dir, f.step, f.moving, {color: '#77B255', skin: '#C08A5B', leg: '#9E6E44', hair: '#7A5230', band: '#E2B84A', scythe, carry: f.carry ? 'grain' : undefined});
   }
@@ -1845,7 +1381,7 @@ function drawFarm(t) {
       ctx.fill();
       sprite(c.def.id, x, y + 2 * U - hop, (rabbit ? 24 : 34) * U, c.vx > 0, rabbit ? 0 : Math.sin(c.step) * .05);
     }
-    if (herd() && fedNow < .99) bubble((b.px0 + b.px1) / 2, b.y0 + 18 * U, 'Мало пшена!', t, '#DD2E44');
+    if (herd(world) && fedNow < .99) bubble((b.px0 + b.px1) / 2, b.y0 + 18 * U, 'Мало пшена!', t, '#DD2E44');
     else tag(hx - 4 * U, b.y0 - 22 * U, `Хлев, ур. ${bl}`);
   }
   hits.push({id: 'barn', x: (b.px0 + b.px1) / 2, y: (b.y0 + b.y1) / 2, r: (b.px1 - b.px0) / 2});
@@ -1937,43 +1473,26 @@ function draw(t) {
 /** @type {Row[]} */
 const rows = [];
 
-/** @type {Record<string, () => number>} */
-const STAT = {
-  fire: () => perTap(),
-  cave: () => seats(),
-  storage: () => cap(),
-  kitchen: () => cook() - 1,
-  bath: () => speed() - 1,
-  hunter: () => rateOf(WORKERS[0]),
-  tracker: () => rateOf(WORKERS[1]),
-  chief: () => rateOf(WORKERS[2]),
-  field: () => grainRate(),
-  granary: () => grainCap(),
-  barn: () => pens(),
-  rabbit: () => animalRate(FARM[3], 1),
-  goat: () => animalRate(FARM[4], 1),
-};
-
 /** @param {Def} def @param {number} n @returns {string} */
 function statLine(def, n) {
   const show = v => def.pct ? `+${pct(v)}%` : num(v);
-  const now = STAT[def.id]();
+  const now = STAT[def.id](world);
   if (n < 1) return `${show(now)} ${def.unit}`;
   const was = state.levels[def.id] || 0;
   state.levels[def.id] = was + n;
-  const next = STAT[def.id]();
+  const next = STAT[def.id](world);
   state.levels[def.id] = was;
   return `${show(now)} → ${show(next)} ${def.unit}`;
 }
 
 /** @param {Def} def @returns {string} */
 function promoteLine(def) {
-  const src = ALL.find(d => d.id === def.from), was = lvl(src.id);
+  const src = ALL.find(d => d.id === def.from), was = lvl(world, src.id);
   if (!was) return `нужен ${src.name.toLowerCase()}`;
-  const now = STAT[src.id](), own = lvl(def.id);
+  const now = STAT[src.id](world), own = lvl(world, def.id);
   state.levels[src.id] = was - 1;
   state.levels[def.id] = own + 1;
-  const loss = now - STAT[src.id]();
+  const loss = now - STAT[src.id](world);
   state.levels[src.id] = was;
   state.levels[def.id] = own;
   return `−1 ${src.name.toLowerCase()}, −${num(loss)} ${src.unit}`;
@@ -1981,10 +1500,7 @@ function promoteLine(def) {
 
 /** @param {Def} def */
 function dismiss(def) {
-  const l = lvl(def.id);
-  if (!l) return;
-  state.levels[def.id] = l - 1;
-  if ((state.injured[def.id] || 0) > l - 1) state.injured[def.id] = l - 1;
+  if (!release(world, def)) return;
   beep(300, .06, 'sine');
   renderList();
 }
@@ -2030,9 +1546,9 @@ function setText(el, text) {
 }
 
 function renderQuests() {
-  const finished = state.stage >= stageCount(), qs = quests();
+  const finished = state.stage >= stageCount(world), qs = quests(world);
   setText($('valley'), valleyName(state.valley));
-  setText($('stageNo'), finished ? 'все вехи пройдены' : `веха ${state.stage + 1} из ${stageCount()}`);
+  setText($('stageNo'), finished ? 'все вехи пройдены' : `веха ${state.stage + 1} из ${stageCount(world)}`);
   questRows.forEach((row, i) => {
     const q = qs[i];
     row.el.hidden = !q;
@@ -2051,28 +1567,26 @@ function renderList() {
   syncWalkers();
   syncCritters();
   renderQuests();
-  setText($('herd'), `${herd()} из ${pens()}`);
-  const hungry = herd() > 0 && grainRate() < grainNeed(), spill = lvl('field') > 0 && harvestSize() > grainCap();
+  setText($('herd'), `${herd(world)} из ${pens(world)}`);
+  const hungry = herd(world) > 0 && grainRate(world) < grainNeed(world), spill = lvl(world, 'field') > 0 && harvestSize(world) > grainCap(world);
   const wait = Math.max(0, Math.ceil(HARVEST - state.harvest)), clock = `${Math.floor(wait / 60)}:${String(wait % 60).padStart(2, '0')}`;
   $('farmNote').classList.toggle('warn', hungry || spill);
-  setText($('farmText'), hungry ? `Скотине не хватает пшена: растёт ${num(grainRate())} в минуту, а съедают ${num(grainNeed())}. Расширь поле!` : spill ? `Амбар вмещает ${num(grainCap())} пшена, а урожай ${num(harvestSize())}: лишнее пропадает. Расширь амбар!` : lvl('field') || herd() ? `Амбар: ${num(Math.floor(state.grain))} из ${num(grainCap())} · урожай +${num(harvestSize())} через ${clock} · едят ${num(grainNeed())}/мин` : 'Распаши поле и построй хлев: кролики и козы едят пшено и дают мясо');
+  setText($('farmText'), hungry ? `Скотине не хватает пшена: растёт ${num(grainRate(world))} в минуту, а съедают ${num(grainNeed(world))}. Расширь поле!` : spill ? `Амбар вмещает ${num(grainCap(world))} пшена, а урожай ${num(harvestSize(world))}: лишнее пропадает. Расширь амбар!` : lvl(world, 'field') || herd(world) ? `Амбар: ${num(Math.floor(state.grain))} из ${num(grainCap(world))} · урожай +${num(harvestSize(world))} через ${clock} · едят ${num(grainNeed(world))}/мин` : 'Распаши поле и построй хлев: кролики и козы едят пшено и дают мясо');
   $('music').classList.toggle('off', !state.music);
   setText($('meat'), num(Math.floor(state.meat)));
-  setText($('cap'), `из ${num(cap())}`);
-  $('counter').classList.toggle('full', state.meat >= cap());
-  if (state.scaredUntil && !isScared()) {
-    state.scaredUntil = 0;
-    state.injured = {};
+  setText($('cap'), `из ${num(cap(world))}`);
+  $('counter').classList.toggle('full', state.meat >= cap(world));
+  if (recover(world)) {
     banner('Племя оправилось от страха', '1fa79');
   }
-  setText($('rate'), `${num(perSec())}/с`);
-  $('counter').classList.toggle('scared', isScared());
+  setText($('rate'), `${num(perSec(world))}/с`);
+  $('counter').classList.toggle('scared', isScared(world));
   $('heatBar').style.width = `${heat}%`;
   setText($('techCount'), `${state.techs.length} из ${TECHS.length}`);
   $('allTechs').hidden = state.techs.length < TECHS.length;
   $('doneHead').hidden = !state.techs.length;
   for (const r of techRows) {
-    const open = unlocked(r.tech), owned = has(r.tech.id), box = owned ? $('techsDone') : $('techs');
+    const open = unlocked(world, r.tech), owned = has(world, r.tech.id), box = owned ? $('techsDone') : $('techs');
     if (r.el.parentElement !== box) box.append(r.el);
     r.el.classList.toggle('owned', owned);
     r.el.classList.toggle('locked', !open && !owned);
@@ -2082,20 +1596,20 @@ function renderList() {
     setText(r.btn, num(r.tech.cost));
     r.btn.disabled = !open || state.meat < r.tech.cost;
   }
-  setText($('staff'), `${staff()} из ${seats()}`);
-  setText($('huntText'), `Охотиться +${num(perTap())}`);
+  setText($('staff'), `${staff(world)} из ${seats(world)}`);
+  setText($('huntText'), `Охотиться +${num(perTap(world))}`);
   const muteSrc = icon(state.muted ? '1f507' : '1f50a');
   if ($('muteIcon').getAttribute('src') !== muteSrc) $('muteIcon').setAttribute('src', muteSrc);
   setText($('buzz'), state.noBuzz ? 'Включить вибрацию' : 'Выключить вибрацию');
   for (const r of rows) {
-    const n = amount(r.def), c = costOf(r.def, Math.max(n, 1)), l = lvl(r.def.id);
-    setText(r.level, l ? (r.def.trip || r.def.feed ? `×${l}` + (hurt(r.def.id) ? `, ранены ${hurt(r.def.id)}` : '') : `ур. ${l}`) : '');
+    const n = amount(world, r.def), c = costOf(world, r.def, Math.max(n, 1)), l = lvl(world, r.def.id);
+    setText(r.level, l ? (r.def.trip || r.def.feed ? `×${l}` + (hurt(world, r.def.id) ? `, ранены ${hurt(world, r.def.id)}` : '') : `ур. ${l}`) : '');
     setText(r.info, statLine(r.def, 1));
     if (r.def.from) setText(r.eat, promoteLine(r.def));
     else if (r.eat) r.eat.classList.toggle('warn', fedNow < .99);
     if (r.eat && !r.def.from) setText(r.eat, `едят ${num(l * r.def.feed * 60)}` + ` → ${num((l + 1) * r.def.feed * 60)}` + '/мин');
     r.pbar.classList.toggle('off', !milestones(r.def));
-    const step = ranked(r.def.id) % MILESTONE;
+    const step = ranked(world, r.def.id) % MILESTONE;
     r.prog.style.width = `${step / MILESTONE * 100}%`;
     setText(r.x2, `${boostText()} через ${MILESTONE - step}`);
     r.drop.disabled = !l;
@@ -2106,28 +1620,21 @@ function renderList() {
     }
     r.btn.disabled = n < 1 || state.meat < c;
   }
-  for (const r of rows) r.el.hidden = !opened(r.def.id);
-  const dots = {quests: !stageBtn.hidden, techs: opened('techs') && techRows.some(r => !has(r.tech.id) && unlocked(r.tech) && state.meat >= r.tech.cost)};
+  for (const r of rows) r.el.hidden = !opened(world, r.def.id);
+  const dots = {quests: !stageBtn.hidden, techs: opened(world, 'techs') && techRows.some(r => !has(world, r.tech.id) && unlocked(world, r.tech) && state.meat >= r.tech.cost)};
   for (const r of rows) dots[secOf(r.def)] ||= !r.el.hidden && !r.btn.disabled;
   for (const el of /** @type {NodeListOf<HTMLElement>} */ (document.querySelectorAll('#nav button'))) {
     el.classList.toggle('dot', Boolean(dots[el.dataset.sec]));
-    el.hidden = (el.dataset.sec === 'techs' && !opened('techs')) || (el.dataset.sec === 'farm' && !opened('field'));
+    el.hidden = (el.dataset.sec === 'techs' && !opened(world, 'techs')) || (el.dataset.sec === 'farm' && !opened(world, 'field'));
   }
   renderExtras();
   renderTutorial();
 }
 
-/** @param {number} from @param {number} ms @returns {number} */
-function cooled(from, ms) {
-  return boostOn('feast') ? from : Math.max(0, from - ms / 1000 * AWAY_COOL * (has('flint') ? .5 : 1));
-}
-
 /** @param {number} since */
 function welcomeBack(since) {
-  const now = Date.now(), away = Math.min((now - since) / 1000, blessed() ? BLESS_OFFLINE_CAP : OFFLINE_CAP);
-  const scared = Math.min(away, Math.max(0, Math.min(state.scaredUntil, now) - (now - away * 1000)) / 1000), fed = steadyFed();
-  const want = (perSec(false, fed) * (away - scared) + perSec(true, fed) * scared) * OFFLINE_SHARE, earned = gain(up(want));
-  state.grain = Math.max(0, Math.min(grainCap(), state.grain + (grainRate() - grainNeed()) / 60 * away));
+  const {away, want, earned} = offline(world, since);
+  overflow(earned, up(want));
   if (away < 20 || earned < 1) return;
   modal(earned < want ? 'Пока тебя не было, племя добыло столько, сколько влезло в склад' : 'Пока тебя не было, племя добыло', `${num(earned)} мяса`, 'Забрать', () => {
     fly(W / 2, H / 2, 25);
@@ -2168,7 +1675,7 @@ const beastAt = (beast, lift) => beast && !beast.fleeing ? scenePoint(beast.xf *
 /** @param {string} icon @param {string} title @param {string} text @param {string} button @returns {Step} */
 const story = (icon, title, text, button) => ({story: true, icon, title, text, button});
 /** @param {string} id @returns {() => boolean} */
-const built = id => () => lvl(id) >= 1;
+const built = id => () => lvl(world, id) >= 1;
 const firePoint = () => scenePoint(spotOf('fire').x, spotOf('fire').y - 14 * U);
 
 /** @type {Step[][]} */
@@ -2264,20 +1771,12 @@ function renderTutorial() {
 /** @type {Record<string, () => void>} */
 const BOOST_USE = {
   fill: () => {
-    gain(Math.max(0, cap() - state.meat));
     fly(W / 2, H / 2, 20);
   },
   ward: () => {
-    state.scaredUntil = 0;
-    state.injured = {};
     if (tiger && !tiger.fleeing) scare('Шаман прогнал тигра!');
   },
-  heal: () => {
-    state.scaredUntil = 0;
-    state.injured = {};
-  },
   lure: () => {
-    state.boosts.ward = 0;
     tiger = {xf: 1.1, lane: .82, hp: 3, fleeing: false, step: 0, shake: 0};
   },
   call: () => {
@@ -2287,98 +1786,29 @@ const BOOST_USE = {
 
 /** @param {Boost} b */
 function buyBoost(b) {
-  if (state.shells < b.price || (b.once && perkOn(b.id))) return;
-  state.shells -= b.price;
-  if (b.once) state.perks.push(b.id);
-  if (b.mins) state.boosts[b.id] = Math.max(Date.now(), state.boosts[b.id] || 0) + b.mins * 60e3;
+  if (!purchaseBoost(world, b)) return;
   BOOST_USE[b.id]?.();
   banner(`${b.name}!`, b.icon);
   tune([523, 784, 1047], 80);
   renderList();
 }
 
-const shopStars = inTelegram && tgAt('6.1') && Boolean(SERVER);
-let paidKeeper = false;
-let paying = false;
-
-/** @param {string} path @param {Record<string, string>} [extra] @returns {Promise<any>} */
-const ask = (path, extra = {}) => fetch(SERVER + path, {method: 'POST', body: JSON.stringify({initData: tg.initData, ...extra})}).then(r => r.ok ? r.json() : Promise.reject(r.status));
-
-/** @param {{keeper?:boolean,blessUntil?:number}} s */
-function applyStatus(s) {
-  paidKeeper = Boolean(s.keeper);
-  if (paidKeeper && !perkOn('keeper')) state.perks.push('keeper');
-  state.blessUntil = s.blessUntil || 0;
-  blessGift();
-}
-
-function blessGift() {
-  const today = new Date().toDateString();
-  if (!blessed() || state.blessDay === today) return;
-  state.blessDay = today;
-  state.shells += BLESS_GIFT;
+function gift() {
+  if (!blessGift(world)) return;
   banner(`Шаман благословляет: +${BLESS_GIFT}`, '1f9d9');
   saveNow();
 }
 
-/** @param {number} [tries] */
-async function claim(tries = 1) {
-  /** @type {{items:string[],keeper:boolean,blessUntil:number}} */
-  let r;
-  try { r = await ask('/claim'); } catch { return; }
-  applyStatus(r);
-  if (!r.items.length && tries > 1) return void setTimeout(() => claim(tries - 1), 2000);
-  for (const id of r.items) {
-    const it = STAR_ITEMS.find(i => i.id === id);
-    if (!it) continue;
-    if (it.shells) state.shells += it.shells;
+const starShop = createStars(world, {
+  gift,
+  item: it => {
     banner(it.shells ? `+${it.shells} ракушек!` : `${it.name}!`, it.icon);
     tune([523, 784, 1047], 80);
-  }
-  saveNow();
-  renderList();
-}
-
-async function syncStars() {
-  if (!shopStars) return;
-  try { applyStatus(await ask('/status')); } catch { blessGift(); }
-  claim();
-}
-
-/** @param {StarItem} it */
-async function buyStars(it) {
-  if (paying) return;
-  paying = true;
-  try {
-    const {link} = await ask('/invoice', {item: it.id});
-    tg.openInvoice(link, (/** @type {string} */ status) => {
-      paying = false;
-      if (status === 'paid') claim(5);
-      if (status === 'failed') banner('Оплата не прошла', '2b50');
-    });
-  } catch {
-    paying = false;
-    banner('Шаман не отвечает, попробуй позже', '2b50');
-  }
-}
-
-/** @type {Record<string, () => number>} */
-const ACH_NOW = {
-  meat: () => state.life.earned,
-  taps: () => state.life.taps,
-  tribe: staff,
-  mammoth: () => state.life.mammoths,
-  tiger: () => state.life.tigers,
-  move: () => state.life.migrations,
-  tech: () => state.techs.length,
-  farm: herd,
-  fire: () => state.peakHeat,
-  full: () => state.meat >= cap() ? 1 : 0,
-};
-/** @param {number} tier @returns {number} */
-const achReward = tier => Math.min(3, 1 + Math.floor(tier / 2));
-/** @param {AchLine} a @returns {number} */
-const tierOf = a => state.tiers[a.id] || 0;
+  },
+  fail: down => banner(down ? 'Шаман не отвечает, попробуй позже' : 'Оплата не прошла', '2b50'),
+  saveNow,
+  refresh: renderList,
+});
 
 const SHELL_IMG = `<img src="${icon('1f41a')}" alt="">`;
 const boostRows = BOOSTS.map(b => {
@@ -2396,7 +1826,7 @@ const starRows = STAR_ITEMS.map(it => {
   el.className = 'item';
   el.innerHTML = `<div class="ico"><img src="${icon(it.icon)}" alt=""></div><div class="info"><b class="full">${it.name}<span></span></b><small class="full">${it.desc}</small></div><button class="buy"><span class="price">${STAR_IMG}${it.stars}</span></button>`;
   const btn = el.querySelector('button');
-  btn.onclick = () => buyStars(it);
+  btn.onclick = () => starShop.buy(it);
   $('stars').append(el);
   return {it, el, btn, left: el.querySelector('span')};
 });
@@ -2417,52 +1847,49 @@ const clock = ms => {
 };
 
 function renderExtras() {
-  const done = ACHS.find(a => tierOf(a) < a.goals.length && ACH_NOW[a.id]() >= a.goals[tierOf(a)]);
+  const done = claimAch(world);
   if (done) {
-    const tier = tierOf(done), reward = achReward(tier);
-    state.tiers[done.id] = tier + 1;
-    state.shells += reward;
-    banner(`Достижение: ${done.names[tier]}! +${reward}`, '1f3c5');
+    banner(`Достижение: ${done.ach.names[done.tier]}! +${done.reward}`, '1f3c5');
     tune([784, 988, 1175], 90);
   }
   setText($('shellCount'), String(state.shells));
   setText($('shopText'), `У тебя ${plural(state.shells, ['ракушка', 'ракушки', 'ракушек'])}. Новые даёт каждое переселение и достижения.`);
   const now = Date.now();
   for (const r of boostRows) {
-    r.el.hidden = Boolean(r.b.need) && !opened(r.b.need);
-    const owned = Boolean(r.b.once) && perkOn(r.b.id);
+    r.el.hidden = Boolean(r.b.need) && !opened(world, r.b.need);
+    const owned = Boolean(r.b.once) && perkOn(world, r.b.id);
     r.el.classList.toggle('owned', owned);
-    setText(r.left, owned ? 'есть' : boostOn(r.b.id) ? `ещё ${clock(state.boosts[r.b.id] - now)}` : '');
+    setText(r.left, owned ? 'есть' : boostOn(world, r.b.id) ? `ещё ${clock(state.boosts[r.b.id] - now)}` : '');
     r.btn.disabled = owned || state.shells < r.b.price;
   }
   $('starShop').hidden = !shopStars;
   for (const r of starRows) {
-    const owned = r.it.id === 'keeper' ? perkOn('keeper') : r.it.id === 'bless' && blessed();
+    const owned = r.it.id === 'keeper' ? perkOn(world, 'keeper') : r.it.id === 'bless' && blessed(world);
     r.el.classList.toggle('owned', owned);
     setText(r.left, r.it.id === 'bless' && owned ? `до ${dayMonth.format(state.blessUntil)}` : owned ? 'есть' : '');
-    r.btn.disabled = owned || paying;
+    r.btn.disabled = owned || starShop.paying;
   }
   /** @type {[string, string, string][]} */
   const fx = [];
-  if (isScared()) fx.push(['1f631', `−80% ${clock(state.scaredUntil - now)}`, ' class="warn"']);
+  if (isScared(world)) fx.push(['1f631', `−80% ${clock(state.scaredUntil - now)}`, ' class="warn"']);
   if (heat >= 1) fx.push(['1f525', `+${pct(heat * .003)}%`, '']);
-  if (state.valley) fx.push(['1f5ff', `+${pct(legacy() - 1)}%`, '']);
-  if (blessed()) fx.push(['1f9d9', `+${pct(BLESS_BOOST - 1)}%`, '']);
-  for (const b of BOOSTS) if (boostOn(b.id)) fx.push([b.icon, clock(state.boosts[b.id] - now), '']);
+  if (state.valley) fx.push(['1f5ff', `+${pct(legacy(world) - 1)}%`, '']);
+  if (blessed(world)) fx.push(['1f9d9', `+${pct(BLESS_BOOST - 1)}%`, '']);
+  for (const b of BOOSTS) if (boostOn(world, b.id)) fx.push([b.icon, clock(state.boosts[b.id] - now), '']);
   const chips = fx.map(([code, text, cls]) => `<span${cls}><img src="${icon(code)}" alt="">${text}</span>`).join('');
   if ($('active').innerHTML !== chips) $('active').innerHTML = chips;
-  const total = ACHS.reduce((sum, a) => sum + a.goals.length, 0), got = ACHS.reduce((sum, a) => sum + tierOf(a), 0);
+  const total = ACHS.reduce((sum, a) => sum + a.goals.length, 0), got = ACHS.reduce((sum, a) => sum + tierOf(world, a), 0);
   setText($('achCount'), `${got} из ${total}`);
   for (const r of achRows) {
-    const tier = tierOf(r.a), max = r.a.goals.length, finished = tier >= max, shown = Math.min(tier, max - 1);
+    const tier = tierOf(world, r.a), max = r.a.goals.length, finished = tier >= max, shown = Math.min(tier, max - 1);
     setText(r.name, r.a.names[shown]);
     setText(r.step, max > 1 ? `${Math.min(tier + 1, max)} из ${max}` : '');
-    setText(r.info, finished ? 'Все ступени пройдены!' : `${r.a.desc(r.a.goals[tier])}: ${num(Math.floor(Math.min(ACH_NOW[r.a.id](), r.a.goals[tier])))} из ${num(r.a.goals[tier])}`);
-    r.bar.style.width = finished ? '100%' : `${Math.min(1, ACH_NOW[r.a.id]() / r.a.goals[tier]) * 100}%`;
+    setText(r.info, finished ? 'Все ступени пройдены!' : `${r.a.desc(r.a.goals[tier])}: ${num(Math.floor(Math.min(ACH_NOW[r.a.id](world), r.a.goals[tier])))} из ${num(r.a.goals[tier])}`);
+    r.bar.style.width = finished ? '100%' : `${Math.min(1, ACH_NOW[r.a.id](world) / r.a.goals[tier]) * 100}%`;
     r.prog.hidden = finished;
     r.side.hidden = finished;
     setText(r.reward, `+${achReward(tier)}`);
-    r.el.classList.toggle('locked', !finished && ACH_NOW[r.a.id]() < r.a.goals[tier] && tier === 0);
+    r.el.classList.toggle('locked', !finished && ACH_NOW[r.a.id](world) < r.a.goals[tier] && tier === 0);
   }
 }
 
@@ -2471,7 +1898,7 @@ build(WORKERS, $('workers'));
 build(FARM, $('farm'));
 syncWalkers();
 openSheet('');
-heat = cooled(state.heat, Date.now() - state.savedAt);
+heat = cooled(world, state.heat, Date.now() - state.savedAt);
 if (!serverSaves) welcomeBack(state.savedAt);
 
 canvas.addEventListener('pointerdown', e => {
@@ -2523,14 +1950,14 @@ $('tutAgain').onclick = () => {
   openSheet('');
   renderList();
 };
-stageBtn.onclick = () => state.stage >= stageCount() ? askMigrate() : claimStage();
+stageBtn.onclick = () => state.stage >= stageCount(world) ? askMigrate() : claimStage();
 $('mOk').onclick = () => {
   $('modal').classList.remove('show');
   onModal?.();
 };
 $('mNo').onclick = () => $('modal').classList.remove('show');
 $('reset').onclick = () => modal('Начать с самой первой долины? Пропадёт всё, включая мудрость предков.', 'Начать заново?', 'Да, заново', () => {
-  state = {...fresh(), muted: state.muted, music: state.music, noBuzz: state.noBuzz, blessUntil: state.blessUntil, blessDay: state.blessDay, restarts: state.restarts + 1, perks: paidKeeper ? ['keeper'] : []};
+  state = restarted(world, starShop.paidKeeper);
   walkers = [];
   critters = [];
   particles = [];
@@ -2556,17 +1983,17 @@ setInterval(() => document.hidden || save(), 5000);
 let hiddenAt = 0;
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) {
-    audio?.resume();
-    if (hiddenAt) heat = cooled(heat, Date.now() - hiddenAt);
+    sound.resume();
+    if (hiddenAt) heat = cooled(world, heat, Date.now() - hiddenAt);
     tigerIn = Math.max(tigerIn, 20);
     if (tiger && !tiger.fleeing) tiger.xf = Math.max(tiger.xf, .95);
-    blessGift();
+    gift();
     if (serverSaves) return void pullServer();
     pullCloud();
     return welcomeBack(state.savedAt);
   }
   hiddenAt = Date.now();
-  audio?.suspend();
+  sound.suspend();
   saveNow();
 });
 addEventListener('pagehide', saveNow);
@@ -2575,5 +2002,5 @@ if (tgAt('8.0')) {
   tg.onEvent('activated', pull);
 }
 pull();
-syncStars();
+starShop.sync();
 renderList();
