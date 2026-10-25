@@ -238,3 +238,14 @@ test('рейтинг: очки из сейва, порядок, кто рань�
   assert.equal(hidden.hidden, true);
   assert.equal(hidden.top.length, 2);
 });
+
+test('рейтинг: свежий сейв в запросе /top сразу даёт актуальные очки и место', async () => {
+  await saveAs({id: 1, first_name: 'Аня'}, {valley: 0, stage: 1});
+  await saveAs(USER, {valley: 0, stage: 0});
+  const r = await ask('/top', {save: saveOf({valley: 0, stage: 2})});
+  assert.equal(r.score, 2);
+  assert.equal(r.place, 1);
+  assert.deepEqual(r.top.map((/** @type {any} */ p) => [p.name, p.score]), [['Вождь', 2], ['Аня', 1]]);
+  const forged = await ask('/top', {save: saveOf({valley: 50, stage: 0})});
+  assert.equal(forged.score, 2);
+});

@@ -1,5 +1,4 @@
 import {plural} from '../format.js';
-import {rankScore} from '../core/quests.js';
 import {ask} from '../platform/telegram.js';
 import {world} from '../game.js';
 import {$, openSec, openSheet, setText} from './dom.js';
@@ -53,8 +52,7 @@ function hideText() {
 /** @param {Board} board */
 function render(board) {
   const box = $('ranks'), mine = board.top.find(p => p.me);
-  const score = rankScore(world.state);
-  setText($('rankText'), world.state.noRank ? `Ты скрыт из рейтинга. ${RULES}.` : `${RULES}. У тебя ${points(score)}` + (board.place ? `, место ${board.place}.` : '.'));
+  setText($('rankText'), world.state.noRank ? `Ты скрыт из рейтинга. ${RULES}.` : `${RULES}. У тебя ${points(board.score)}` + (board.place ? `, место ${board.place}.` : '.'));
   box.replaceChildren(...board.top.map((p, i) => row(p, i + 1)));
   if (!mine && board.place && !world.state.noRank) {
     const gap = document.createElement('div');
@@ -74,7 +72,7 @@ function render(board) {
 export async function loadRating() {
   hideText();
   setText($('rankText'), `${RULES}. Шаман пересчитывает племена...`);
-  try { render(await ask('/top')); } catch { setText($('rankText'), 'Шаман не отвечает, попробуй позже.'); }
+  try { render(await ask('/top', {save: JSON.stringify(world.state)})); } catch { setText($('rankText'), 'Шаман не отвечает, попробуй позже.'); }
 }
 
 export function toggleRating() {
@@ -86,5 +84,5 @@ export function toggleHidden() {
   world.state.noRank = !world.state.noRank;
   hideText();
   saveNow();
-  setTimeout(loadRating, 1500);
+  loadRating();
 }

@@ -256,7 +256,10 @@ export default {
     else if (url.pathname === '/status') res = Response.json(await statusOf(env, user.id));
     else if (url.pathname === '/load') res = await load(env, user);
     else if (url.pathname === '/save') res = await store(env, user, body.save);
-    else if (url.pathname === '/top') res = await top(env, user);
+    else if (url.pathname === '/top') {
+      if (body.save) await store(env, user, body.save);
+      res = await top(env, user);
+    }
     else res = new Response('not found', {status: 404});
     for (const [k, v] of Object.entries(cors)) res.headers.set(k, v);
     return res;
