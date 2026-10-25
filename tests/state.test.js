@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
+import {SAVE_EPOCH} from '../src/config.js';
 import {TUT_DONE, ahead, fresh, parseSave} from '../src/core/state.js';
 
 test('старый сейв (econ не 2): мясо x10, пшено x5', () => {
@@ -42,4 +43,9 @@ test('ahead: сначала сбросы, потом переселения, п�
   assert.equal(ahead(s(0, 2, 0), s(0, 1, 9e9)), true);
   assert.equal(ahead(s(0, 1, 10), s(0, 1, 9)), true);
   assert.equal(ahead(s(0, 1, 9), s(0, 1, 9)), false);
+});
+
+test('сейв после вайпа получает метку эпохи, даже если её не было', () => {
+  assert.equal(fresh().epoch, SAVE_EPOCH);
+  assert.equal(parseSave(JSON.stringify({meat: 1, econ: 2})).epoch, SAVE_EPOCH);
 });

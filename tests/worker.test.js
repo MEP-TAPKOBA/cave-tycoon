@@ -167,3 +167,10 @@ test('/gift: только из чата Дени и с понятными чис
   assert.match((await say(7, '/gift 42 100000')).text, /^Формат/);
   assert.equal(db.prepare('SELECT COUNT(*) AS n FROM pays').get().n, 0);
 });
+
+test('сейв до вайпа (без метки эпохи) сервер не принимает', async () => {
+  const old = JSON.stringify({...fresh(), epoch: undefined, meat: 500});
+  const r = await worker.fetch(new Request('https://w.test/save', {method: 'POST', body: JSON.stringify({initData: initData(USER), save: old})}), env);
+  assert.equal(r.status, 400);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM saves').get().n, 0);
+});

@@ -1,3 +1,4 @@
+import {SAVE_EPOCH} from '../src/config.js';
 import {STAR_ITEMS} from '../src/data/shop.js';
 import {judge, ledgerOf} from '../src/core/check.js';
 import {ahead, parseSave} from '../src/core/state.js';
@@ -164,7 +165,7 @@ async function ledger(env, id) {
 
 /** @param {Env} env @param {User} user @param {unknown} text @returns {Promise<Response>} */
 async function store(env, user, text) {
-  const s = typeof text === 'string' && text.length <= MAX_SAVE ? parseSave(text) : null;
+  const s = typeof text === 'string' && text.length <= MAX_SAVE && text.includes(`"epoch":${SAVE_EPOCH}`) ? parseSave(text) : null;
   if (!s) return new Response('bad save', {status: 400});
   const now = Date.now(), row = await env.DB.prepare('SELECT data, saved_at FROM saves WHERE id = ?').bind(user.id).first();
   const prev = row ? parseSave(row.data) : null;

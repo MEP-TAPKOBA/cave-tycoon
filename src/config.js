@@ -11,6 +11,7 @@ export const MAMMOTH_REST = 5 * 60;
 export const MILESTONE = 25;
 export const MILESTONE_BOOST = 1.4;
 export const SAVE_KEY = 'cave-tycoon-2';
+export const SAVE_EPOCH = 2;
 export const SERVER = 'https://cave-tycoon.mep-tapkoba.workers.dev';
 export const CLOUD_EVERY = 20e3;
 export const CLOUD_MAX = 4096;
