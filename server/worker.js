@@ -1,21 +1,18 @@
-/** @typedef {{title:string,description:string,stars:number,period?:number,once?:boolean}} Item */
+import {STAR_ITEMS} from '../src/data/shop.js';
+import {ahead, parseSave} from '../src/core/state.js';
+
+/** @typedef {import('../src/data/shop.js').StarItem} StarItem */
 /** @typedef {{item:string,charge:string,stars:number,at:number,given:boolean}} Pay */
 /** @typedef {{id:number,first_name?:string,last_name?:string,username?:string}} User */
 /** @typedef {{TOKEN:string,HOOK:string,GAME:string,ADMIN?:string,KV?:any,DB:any}} Env */
 
-const MONTH = 30 * 24 * 3600;
+const DAY = 24 * 3600;
 const INIT_TTL = 24 * 3600;
 const MAX_SAVE = 64 * 1024;
 const USER_TAG = /#id(\d+)/;
 
-/** @type {Record<string, Item>} */
-const ITEMS = {
-  shells30: {title: 'Горсть ракушек', description: '30 ракушек для лавки шамана', stars: 50},
-  shells150: {title: 'Мешок ракушек', description: '150 ракушек для лавки шамана', stars: 200},
-  shells400: {title: 'Сундук ракушек', description: '400 ракушек для лавки шамана', stars: 500},
-  keeper: {title: 'Хранитель огня', description: 'Навсегда: днём жар костра не опускается ниже 50%', stars: 150, once: true},
-  bless: {title: 'Благословение шамана', description: '30 дней: добыча +25%, 5 ракушек каждый день, племя копит добычу без тебя 4 часа вместо 2', stars: 300, period: MONTH},
-};
+/** @param {string} id @returns {StarItem|undefined} */
+const itemOf = id => STAR_ITEMS.find(i => i.id === id);
 
 const SUPPORT = 'Вопросы по покупкам в «Пещерном магнате»: напиши сюда, что купил, когда и что пошло не так. Ответим и, если покупка не пришла, вернём звёзды.';
 const HELLO = 'Привет, вождь! Племя ждёт: костёр не разожжён, а мамонты бродят совсем рядом.\n\nЖми «Играть», чтобы открыть «Пещерного магната». Прогресс сохраняется на сервере игры, так что играть можно и с телефона, и с компьютера.\n\nВопросы по покупкам: /paysupport';
@@ -45,15 +42,6 @@ export async function checkInit(initData, token) {
   try { return JSON.parse(p.get('user') || 'null'); } catch { return null; }
 }
 
-/** @param {any} s @returns {number[]} */
-const rank = s => [s?.restarts || 0, s?.life?.migrations || 0, s?.life?.earned || 0];
-
-/** @param {any} a @param {any} b @returns {boolean} */
-export function ahead(a, b) {
-  const x = rank(a), y = rank(b), i = x.findIndex((v, n) => v !== y[n]);
-  return i >= 0 && x[i] > y[i];
-}
-
 /** @param {User} u @returns {string} */
 const nameOf = u => [u.first_name, u.last_name].filter(Boolean).join(' ') + (u.username ? ` (@${u.username})` : '');
 
@@ -78,7 +66,7 @@ async function statusOf(env, id) {
 
 /** @param {Env} env @param {any} q @returns {Promise<object>} */
 async function preCheckout(env, q) {
-  const it = ITEMS[q.invoice_payload];
+  const it = itemOf(q.invoice_payload);
   const no = (/** @type {string} */ error_message) => ({method: 'answerPreCheckoutQuery', pre_checkout_query_id: q.id, ok: false, error_message});
   if (!it || q.currency !== 'XTR' || q.total_amount !== it.stars) return no('Этот товар больше не продаётся. Открой игру заново.');
   if (it.once && (await statusOf(env, q.from.id)).keeper) return no('Хранитель огня у тебя уже есть.');
@@ -87,11 +75,11 @@ async function preCheckout(env, q) {
 
 /** @param {Env} env @param {any} msg @returns {Promise<void>} */
 async function paid(env, msg) {
-  const pay = msg.successful_payment, id = msg.from.id, item = pay.invoice_payload;
+  const pay = msg.successful_payment, id = msg.from.id, item = pay.invoice_payload, it = itemOf(item);
   await ensurePlayer(env, id);
   const stmts = [env.DB.prepare('INSERT OR IGNORE INTO pays (charge, user_id, item, stars, at, given) VALUES (?, ?, ?, ?, ?, 0)').bind(pay.telegram_payment_charge_id, id, item, pay.total_amount, Date.now())];
-  if (item === 'keeper') stmts.push(env.DB.prepare('UPDATE players SET keeper = 1 WHERE id = ?').bind(id));
-  if (item === 'bless') stmts.push(env.DB.prepare('UPDATE players SET bless_until = MAX(bless_until, ?) WHERE id = ?').bind((pay.subscription_expiration_date || Date.now() / 1000 + MONTH) * 1000, id));
+  if (it?.once) stmts.push(env.DB.prepare('UPDATE players SET keeper = 1 WHERE id = ?').bind(id));
+  if (it?.days) stmts.push(env.DB.prepare('UPDATE players SET bless_until = MAX(bless_until, ?) WHERE id = ?').bind((pay.subscription_expiration_date || Date.now() / 1000 + it.days * DAY) * 1000, id));
   await env.DB.batch(stmts);
 }
 
@@ -131,9 +119,10 @@ async function hook(env, u) {
 
 /** @param {Env} env @param {string} item @returns {Promise<Response>} */
 async function invoice(env, item) {
-  const it = ITEMS[item];
+  const it = itemOf(item);
   if (!it) return new Response('unknown item', {status: 400});
-  const r = await api(env, 'createInvoiceLink', {title: it.title, description: it.description, payload: item, currency: 'XTR', prices: [{label: it.title, amount: it.stars}], ...(it.period ? {subscription_period: it.period} : {})});
+  const description = it.desc[0].toUpperCase() + it.desc.slice(1);
+  const r = await api(env, 'createInvoiceLink', {title: it.name, description, payload: item, currency: 'XTR', prices: [{label: it.name, amount: it.stars}], ...(it.days ? {subscription_period: it.days * DAY} : {})});
   return r.ok ? Response.json({link: r.result}) : new Response(r.description || 'telegram error', {status: 502});
 }
 
@@ -152,12 +141,10 @@ async function load(env, user) {
 
 /** @param {Env} env @param {User} user @param {unknown} text @returns {Promise<Response>} */
 async function store(env, user, text) {
-  /** @type {any} */
-  let s = null;
-  try { s = typeof text === 'string' && text.length <= MAX_SAVE ? JSON.parse(text) : null; } catch {}
-  if (!s || typeof s !== 'object' || typeof s.meat !== 'number') return new Response('bad save', {status: 400});
+  const s = typeof text === 'string' && text.length <= MAX_SAVE ? parseSave(text) : null;
+  if (!s) return new Response('bad save', {status: 400});
   const now = Date.now(), row = await env.DB.prepare('SELECT data, saved_at FROM saves WHERE id = ?').bind(user.id).first();
-  if (row && ahead(JSON.parse(row.data), s)) return Response.json({ok: false, save: row.data, savedAt: row.saved_at, now});
+  if (row && ahead(parseSave(row.data), s)) return Response.json({ok: false, save: row.data, savedAt: row.saved_at, now});
   await env.DB.prepare('INSERT INTO saves (id, data, saved_at, name) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET data = excluded.data, saved_at = excluded.saved_at, name = excluded.name').bind(user.id, text, now, nameOf(user)).run();
   return Response.json({ok: true, savedAt: now, now});
 }

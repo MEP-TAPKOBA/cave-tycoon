@@ -15,12 +15,12 @@ export const BOOSTS = [
   {id: 'call', name: 'Зов мамонта', icon: '1f9a3', desc: 'мамонт приходит прямо сейчас', price: 4, need: 'mammoth'},
   {id: 'grain', name: 'Плодородие', icon: '1f33e', desc: 'поле даёт втрое больше пшена 1 час', price: 6, mins: 60, need: 'field'},
 ];
-/** @typedef {{id:string,name:string,icon:string,desc:string,stars:number,shells?:number}} StarItem */
+/** @typedef {{id:string,name:string,icon:string,desc:string,stars:number,shells?:number,once?:boolean,days?:number}} StarItem */
 /** @type {StarItem[]} */
 export const STAR_ITEMS = [
   {id: 'shells30', name: 'Горсть ракушек', icon: '1f41a', desc: '30 ракушек для лавки шамана', stars: 50, shells: 30},
   {id: 'shells150', name: 'Мешок ракушек', icon: '1f41a', desc: '150 ракушек для лавки шамана', stars: 200, shells: 150},
   {id: 'shells400', name: 'Сундук ракушек', icon: '1f41a', desc: '400 ракушек для лавки шамана', stars: 500, shells: 400},
-  {id: 'keeper', name: 'Хранитель огня', icon: '1fab5', desc: `навсегда: днём жар не ниже ${KEEPER_HEAT}%`, stars: 150},
-  {id: 'bless', name: 'Благословение шамана', icon: '1f9d9', desc: `на 30 дней: добыча +${pct(BLESS_BOOST - 1)}%, ${BLESS_GIFT} ракушек каждый день, доход без тебя копится 4 часа вместо 2`, stars: 300},
+  {id: 'keeper', name: 'Хранитель огня', icon: '1fab5', desc: `навсегда: днём жар не ниже ${KEEPER_HEAT}%`, stars: 150, once: true},
+  {id: 'bless', name: 'Благословение шамана', icon: '1f9d9', desc: `на 30 дней: добыча +${pct(BLESS_BOOST - 1)}%, ${BLESS_GIFT} ракушек каждый день, доход без тебя копится 4 часа вместо 2`, stars: 300, days: 30},
 ];
