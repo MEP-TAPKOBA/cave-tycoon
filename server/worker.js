@@ -1,4 +1,5 @@
 import {STAR_ITEMS} from '../src/data/shop.js';
+import {judge, ledgerOf} from '../src/core/check.js';
 import {ahead, parseSave} from '../src/core/state.js';
 
 /** @typedef {import('../src/data/shop.js').StarItem} StarItem */
@@ -139,14 +140,26 @@ async function load(env, user) {
   return Response.json({save: row?.data ?? null, savedAt: row?.saved_at ?? 0, now: Date.now()});
 }
 
+/** @param {Env} env @param {number} id @returns {Promise<import('../src/core/check.js').Ledger>} */
+async function ledger(env, id) {
+  await ensurePlayer(env, id);
+  const p = await env.DB.prepare('SELECT bless_until FROM players WHERE id = ?').bind(id).first();
+  const {results} = await env.DB.prepare('SELECT item, COUNT(*) AS count FROM pays WHERE user_id = ? GROUP BY item').bind(id).all();
+  return ledgerOf(results, p?.bless_until || 0);
+}
+
 /** @param {Env} env @param {User} user @param {unknown} text @returns {Promise<Response>} */
 async function store(env, user, text) {
   const s = typeof text === 'string' && text.length <= MAX_SAVE ? parseSave(text) : null;
   if (!s) return new Response('bad save', {status: 400});
   const now = Date.now(), row = await env.DB.prepare('SELECT data, saved_at FROM saves WHERE id = ?').bind(user.id).first();
-  if (row && ahead(parseSave(row.data), s)) return Response.json({ok: false, save: row.data, savedAt: row.saved_at, now});
-  await env.DB.prepare('INSERT INTO saves (id, data, saved_at, name) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET data = excluded.data, saved_at = excluded.saved_at, name = excluded.name').bind(user.id, text, now, nameOf(user)).run();
-  return Response.json({ok: true, savedAt: now, now});
+  const prev = row ? parseSave(row.data) : null;
+  if (prev && ahead(prev, s)) return Response.json({ok: false, save: row.data, savedAt: row.saved_at, now});
+  const {verdict, state} = judge(s, prev, row ? now - row.saved_at : 0, await ledger(env, user.id), now);
+  if (verdict === 'reject') return Response.json({ok: false, save: row?.data ?? null, savedAt: row?.saved_at ?? now, now});
+  const data = verdict === 'fixed' ? JSON.stringify(state) : text;
+  await env.DB.prepare('INSERT INTO saves (id, data, saved_at, name) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET data = excluded.data, saved_at = excluded.saved_at, name = excluded.name').bind(user.id, data, now, nameOf(user)).run();
+  return Response.json(verdict === 'fixed' ? {ok: false, save: data, savedAt: now, now} : {ok: true, savedAt: now, now});
 }
 
 export default {
