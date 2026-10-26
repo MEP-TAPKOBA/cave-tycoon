@@ -3,6 +3,11 @@
 const STEP = 60 / 96 / 4;
 const PENTA = [146.83, 174.61, 196, 220, 261.63, 293.66, 349.23, 392, 440, 523.25];
 const MOTIFS = [[4, 5, 4, 3, 2], [2, 3, 4, 6, 5, 4], [7, 6, 4, 5, 4], [4, 4, 3, 2, 0], [5, 7, 8, 7, 5, 4], [2, 4, 5, 4, 2, 3], [6, 5, 4, 2, 3, 2]];
+/** @type {Record<string, {file:string,gain:number,lowpass:number}>} */
+const VOICES = {
+  mammoth: {file: 'assets/sounds/mammoth.mp3', gain: .175, lowpass: 3000},
+  tiger: {file: 'assets/sounds/tiger.wav', gain: .13, lowpass: 20000},
+};
 
 /** @param {World} world */
 export function createSound(world) {
@@ -13,6 +18,8 @@ export function createSound(world) {
   /** @type {AudioBuffer|undefined} */
   let noiseBuf;
   let nextStep = 0, stepNo = 0;
+  /** @type {Record<string, Promise<AudioBuffer|null>>} */
+  const voices = {};
 
   /** @returns {AudioBuffer} */
   function noise() {
@@ -42,39 +49,26 @@ export function createSound(world) {
   /** @param {number[]} notes @param {number} gap */
   const tune = (notes, gap) => notes.forEach((f, i) => setTimeout(() => beep(f, .14), i * gap));
 
-  function trumpet() {
+  /** @param {string} name @returns {Promise<AudioBuffer|null>} */
+  const load = name => voices[name] ??= fetch(VOICES[name].file).then(r => r.arrayBuffer()).then(b => audio.decodeAudioData(b)).catch(() => {
+    delete voices[name];
+    return null;
+  });
+
+  /** @param {string} name */
+  async function voice(name) {
     if (world.state.noBeasts) return;
     try {
       audio ??= new AudioContext();
-      const at = audio.currentTime, f = audio.createBiquadFilter(), g = audio.createGain(), lfo = audio.createOscillator(), depth = audio.createGain();
-      const horns = [1, 1.012].map(() => audio.createOscillator());
-      lfo.frequency.value = 7;
-      depth.gain.value = 9;
-      lfo.connect(depth);
-      horns.forEach((o, i) => {
-        const k = i ? 1.012 : 1;
-        o.type = 'sawtooth';
-        o.frequency.setValueAtTime(240 * k, at);
-        o.frequency.exponentialRampToValueAtTime(370 * k, at + .18);
-        o.frequency.setValueAtTime(370 * k, at + .75);
-        o.frequency.exponentialRampToValueAtTime(290 * k, at + 1.15);
-        depth.connect(o.frequency);
-        o.connect(f);
-      });
+      const buf = await load(name), v = VOICES[name];
+      if (!buf || world.state.noBeasts) return;
+      const src = audio.createBufferSource(), f = audio.createBiquadFilter(), g = audio.createGain();
+      src.buffer = buf;
       f.type = 'lowpass';
-      f.Q.value = 3;
-      f.frequency.setValueAtTime(700, at);
-      f.frequency.exponentialRampToValueAtTime(1800, at + .2);
-      f.frequency.exponentialRampToValueAtTime(800, at + 1.15);
-      g.gain.setValueAtTime(.0001, at);
-      g.gain.exponentialRampToValueAtTime(.03, at + .1);
-      g.gain.setValueAtTime(.03, at + .8);
-      g.gain.exponentialRampToValueAtTime(.0001, at + 1.2);
-      f.connect(g).connect(audio.destination);
-      for (const o of [...horns, lfo]) {
-        o.start(at);
-        o.stop(at + 1.25);
-      }
+      f.frequency.value = v.lowpass;
+      g.gain.value = v.gain;
+      src.connect(f).connect(g).connect(audio.destination);
+      src.start();
     } catch {}
   }
 
@@ -94,41 +88,6 @@ export function createSound(world) {
       s.connect(f).connect(g).connect(audio.destination);
       s.start(at);
       s.stop(at + len + .02);
-    } catch {}
-  }
-
-  function roar() {
-    if (world.state.noBeasts) return;
-    try {
-      audio ??= new AudioContext();
-      const at = audio.currentTime, o = audio.createOscillator(), growl = audio.createOscillator(), depth = audio.createGain(), am = audio.createGain(), g = audio.createGain();
-      const s = audio.createBufferSource(), f = audio.createBiquadFilter(), ng = audio.createGain();
-      o.type = 'sawtooth';
-      o.frequency.setValueAtTime(95, at);
-      o.frequency.exponentialRampToValueAtTime(130, at + .25);
-      o.frequency.exponentialRampToValueAtTime(65, at + 1);
-      growl.frequency.value = 28;
-      depth.gain.value = .4;
-      am.gain.value = .6;
-      growl.connect(depth).connect(am.gain);
-      g.gain.setValueAtTime(.0001, at);
-      g.gain.exponentialRampToValueAtTime(.06, at + .12);
-      g.gain.setValueAtTime(.06, at + .55);
-      g.gain.exponentialRampToValueAtTime(.0001, at + 1.05);
-      s.buffer = noise();
-      f.type = 'bandpass';
-      f.frequency.setValueAtTime(500, at);
-      f.frequency.exponentialRampToValueAtTime(260, at + 1);
-      f.Q.value = 1.5;
-      ng.gain.setValueAtTime(.0001, at);
-      ng.gain.exponentialRampToValueAtTime(.05, at + .1);
-      ng.gain.exponentialRampToValueAtTime(.0001, at + 1);
-      o.connect(am).connect(g).connect(audio.destination);
-      s.connect(f).connect(ng).connect(audio.destination);
-      for (const n of [o, growl, s]) {
-        n.start(at);
-        n.stop(at + 1.1);
-      }
     } catch {}
   }
 
@@ -306,6 +265,7 @@ export function createSound(world) {
   function wake() {
     try {
       audio ??= new AudioContext();
+      for (const name in VOICES) load(name);
       if (audio.state === 'running') return;
       audio.resume();
       const s = audio.createBufferSource();
@@ -319,8 +279,8 @@ export function createSound(world) {
   return {
     beep,
     tune,
-    trumpet,
-    roar,
+    trumpet: () => void voice('mammoth'),
+    roar: () => void voice('tiger'),
     sizzle,
     resume: () => void audio?.resume(),
     suspend: () => void audio?.suspend(),
