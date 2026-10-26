@@ -51,6 +51,12 @@ const achRows = ACHS.map(a => {
   return {a, el, name, reward, step: /** @type {HTMLElement} */ (el.querySelector('b span')), info: el.querySelector('small'), bar: /** @type {HTMLElement} */ (el.querySelector('.prog i')), prog: /** @type {HTMLElement} */ (el.querySelector('.prog')), side: /** @type {HTMLElement} */ (el.querySelector('.reward'))};
 });
 
+$('active').addEventListener('click', e => {
+  if (!(/** @type {HTMLElement} */ (e.target)).closest('.bless') || !blessed(world)) return;
+  const days = Math.ceil((world.state.blessUntil - Date.now()) / 864e5);
+  banner(`Благословение: ещё ${plural(days, ['день', 'дня', 'дней'])}`, '1f9d9');
+});
+
 /** @param {number} ms @returns {string} */
 const clock = ms => {
   const s = Math.max(0, Math.ceil(ms / 1000)), h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), sec = String(s % 60).padStart(2, '0');
@@ -85,7 +91,7 @@ export function renderExtras() {
   if (isScared(world)) fx.push(['1f631', `−80% ${clock(world.state.scaredUntil - now)}`, ' class="warn"']);
   if (world.heat >= 1) fx.push(['1f525', `+${pct(world.heat * .003)}%`, '']);
   if (world.state.valley) fx.push(['1f5ff', `+${pct(legacy(world) - 1)}%`, '']);
-  if (blessed(world)) fx.push(['1f9d9', `+${pct(BLESS_BOOST - 1)}%`, '']);
+  if (blessed(world)) fx.push(['1f9d9', `+${pct(BLESS_BOOST - 1)}%`, ' class="bless"']);
   for (const b of BOOSTS) if (boostOn(world, b.id)) fx.push([b.icon, clock(world.state.boosts[b.id] - now), '']);
   const chips = fx.map(([code, text, cls]) => `<span${cls}><img src="${icon(code)}" alt="">${text}</span>`).join('');
   if ($('active').innerHTML !== chips) $('active').innerHTML = chips;

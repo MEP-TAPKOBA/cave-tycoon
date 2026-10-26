@@ -303,12 +303,18 @@ export function createSound(world) {
     }
   }
   setInterval(musicTick, 50);
-  document.addEventListener('pointerdown', () => {
+  function wake() {
     try {
       audio ??= new AudioContext();
-      if (audio.state === 'suspended') audio.resume();
+      if (audio.state === 'running') return;
+      audio.resume();
+      const s = audio.createBufferSource();
+      s.buffer = audio.createBuffer(1, 1, audio.sampleRate);
+      s.connect(audio.destination);
+      s.start();
     } catch {}
-  });
+  }
+  for (const type of ['pointerdown', 'pointerup', 'touchend', 'click']) document.addEventListener(type, wake, true);
 
   return {
     beep,

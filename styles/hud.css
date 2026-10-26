@@ -34,5 +34,6 @@
 .active{position:absolute;left:0;right:0;top:calc(100% + 6px);display:flex;flex-wrap:wrap;gap:6px}
 .active:empty{display:none}
 .active span.warn{color:var(--red)}
+.active span.bless{pointer-events:auto;cursor:pointer}
 .active span{display:flex;align-items:center;gap:3px;background:var(--card);border-radius:8px;padding:2px 7px 2px 3px;font-size:12px;font-weight:700;box-shadow:0 2px 0 var(--line)}
 .active img{width:16px;height:16px}

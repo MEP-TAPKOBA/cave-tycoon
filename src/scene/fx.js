@@ -79,9 +79,10 @@ export function drawFx() {
       ctx.lineWidth = 3.5;
       ctx.lineJoin = 'round';
       ctx.strokeStyle = '#3B2A1E';
-      ctx.strokeText(p.text, p.x, p.y);
+      const half = ctx.measureText(p.text).width / 2 + 4 * U, x = Math.min(Math.max(p.x, half), W - half);
+      ctx.strokeText(p.text, x, p.y);
       ctx.fillStyle = p.color;
-      ctx.fillText(p.text, p.x, p.y);
+      ctx.fillText(p.text, x, p.y);
     } else if (p.kind === 'fly') {
       ctx.globalAlpha = 1;
       spriteAt('meat', p.x, p.y, 16 * U, p.life * 6);
