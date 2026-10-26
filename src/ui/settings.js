@@ -16,11 +16,11 @@ export function toggleKeeper() {
 /** @type {Setting[]} */
 const SETTINGS = [
   {name: 'Хранитель огня', desc: `держит жар не ниже ${KEEPER_HEAT}% днём и ночью`, icon: '1fab5', on: () => !world.state.keeperOff, flip: toggleKeeper, shown: () => perkOn(world, 'keeper')},
-  {name: 'Звуки', desc: 'охота, постройки и звери', icon: '1f50a', on: () => !world.state.muted, flip: () => {
+  {name: 'Звуки', desc: 'охота, постройки, покупки', icon: '1f50a', on: () => !world.state.muted, flip: () => {
     world.state.muted = !world.state.muted;
     beep(520, .04, 'sine');
   }},
-  {name: 'Голоса зверей', desc: 'мамонт трубит, тигр рычит', icon: '1f9a3', on: () => !world.state.noBeasts, flip: () => {
+  {name: 'Голоса зверей', desc: 'мамонт трубит, тигр рычит, даже если звуки выключены', icon: '1f9a3', on: () => !world.state.noBeasts, flip: () => {
     world.state.noBeasts = !world.state.noBeasts;
     trumpet();
   }},
