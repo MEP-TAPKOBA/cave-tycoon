@@ -119,38 +119,50 @@ async function present(env, msg, usage, max, make) {
   const [, who, count] = String(msg.text).trim().split(/\s+/), to = Number(who), n = Number(count);
   const reply = (/** @type {string} */ text) => ({method: 'sendMessage', chat_id: msg.chat.id, text});
   if (!Number.isInteger(n) || n < 1 || n > max || (who !== 'all' && (!Number.isInteger(to) || to <= 0))) return reply(usage);
-  const p = make(n);
-  if (who === 'all') return offerAll(env, msg, p);
+  const p = make(n), now = Date.now(), tag = `gift-${msg.message_id}`;
+  if (who === 'all') {
+    const ids = await audience(env, env.ADMIN), job = `gift:${msg.message_id}`;
+    if (ids.length) await env.DB.batch(ids.flatMap(id => presentTo(env, id, p, `${tag}-${id}`, now)));
+    await enqueue(env, job, ids, p.text);
+    await pump(env);
+    const s = await progress(env, job);
+    return reply(`Подарено всем игрокам (${ids.length}): ${p.what}. Сообщение дошло до ${s.ok}` + (s.waiting ? `, остальным ${s.waiting} напишу сам в ближайшие минуты` : '') + '.');
+  }
   await ensurePlayer(env, to);
-  await env.DB.batch(presentTo(env, to, p, `gift-${crypto.randomUUID()}`, Date.now()));
+  await env.DB.batch(presentTo(env, to, p, `${tag}-${to}`, now));
   const r = await api(env, 'sendMessage', {chat_id: to, text: p.text});
   return reply(`Подарено игроку #id${to}: ${p.what}. Получит при входе в игру.` + (r.ok ? '' : ' Сообщение игроку не дошло: он ещё не писал боту.'));
 }
 
-/** @param {Env} env @param {any} msg @param {Present} p @returns {Promise<object>} */
-async function offerAll(env, msg, p) {
-  const reply = (/** @type {string} */ text) => ({method: 'sendMessage', chat_id: msg.chat.id, text});
-  if (!env.KV) return reply('Подарок всем не работает: у сервера нет KV.');
-  const n = (await audience(env, env.ADMIN)).length;
-  const sent = await api(env, 'sendMessage', {chat_id: msg.chat.id, text: `Подарок всем игрокам (${n}): ${p.what}.\n\nКаждый получит сообщение:\n${p.text}`});
-  if (!sent.ok) return reply(`Черновик не создан: ${sent.description || 'ошибка Telegram'}`);
-  await env.KV.put(`give:${sent.result.message_id}`, JSON.stringify({...p, done: []}), {expirationTtl: 30 * DAY});
-  return reply('Чтобы раздать подарок, ответь на черновик командой /send.' + (n > MAX_BROADCAST ? ` За один раз получат ${MAX_BROADCAST}, остальные - повторным /send на тот же черновик.` : ''));
+/** @param {Env} env @param {string} job @param {number[]} ids @param {string} text @returns {Promise<void>} */
+async function enqueue(env, job, ids, text) {
+  if (ids.length) await env.DB.batch(ids.map(id => env.DB.prepare('INSERT OR IGNORE INTO outbox (job, user_id, text) VALUES (?, ?, ?)').bind(job, id, text)));
 }
 
-/** @param {Env} env @param {any} msg @param {string} key @param {Present & {done:number[]}} p @returns {Promise<object>} */
-async function giveAll(env, msg, key, p) {
-  const done = new Set(p.done), now = Date.now();
-  const ids = (await audience(env, env.ADMIN)).filter(id => !done.has(id)), batch = ids.slice(0, MAX_BROADCAST);
-  if (batch.length) await env.DB.batch(batch.flatMap(id => presentTo(env, id, p, `${key}:${id}`, now)));
-  let ok = 0;
-  for (const id of batch) {
-    done.add(id);
-    if ((await api(env, 'sendMessage', {chat_id: id, text: p.text})).ok) ok++;
+/** @param {Env} env @returns {Promise<string[]>} */
+async function pump(env) {
+  const {results} = await env.DB.prepare('UPDATE outbox SET state = 1 WHERE rowid IN (SELECT rowid FROM outbox WHERE state = 0 ORDER BY rowid LIMIT ?) RETURNING job, user_id, text').bind(MAX_BROADCAST).all();
+  /** @type {{job:string,user_id:number,text:string}[]} */
+  const got = [];
+  for (const r of results) if ((await api(env, 'sendMessage', {chat_id: r.user_id, text: r.text})).ok) got.push(r);
+  if (got.length) await env.DB.batch(got.map(r => env.DB.prepare('UPDATE outbox SET state = 2 WHERE job = ? AND user_id = ?').bind(r.job, r.user_id)));
+  return [...new Set(results.map((/** @type {{job:string}} */ r) => r.job))];
+}
+
+/** @param {Env} env @param {string} job @returns {Promise<{total:number,ok:number,waiting:number}>} */
+async function progress(env, job) {
+  const r = await env.DB.prepare('SELECT COUNT(*) AS total, COALESCE(SUM(state = 2), 0) AS ok, COALESCE(SUM(state = 0), 0) AS waiting FROM outbox WHERE job = ?').bind(job).first();
+  return {total: r.total, ok: r.ok, waiting: r.waiting};
+}
+
+/** @param {Env} env @returns {Promise<void>} */
+async function tick(env) {
+  for (const job of await pump(env)) {
+    const s = await progress(env, job);
+    if (s.waiting || !env.ADMIN) continue;
+    const what = job.startsWith('gift:') ? 'Сообщения о подарке разосланы' : 'Рассылка закончена';
+    await api(env, 'sendMessage', {chat_id: env.ADMIN, text: `${what}: дошло до ${s.ok} из ${s.total}.`}).catch(() => null);
   }
-  await env.KV.put(key, JSON.stringify({...p, done: [...done]}), {expirationTtl: 30 * DAY});
-  const left = ids.length - batch.length;
-  return {method: 'sendMessage', chat_id: msg.chat.id, text: `Подарено: ${batch.length}, сообщение дошло до ${ok}` + (left ? `. Осталось ${left}: ответь /send на тот же черновик ещё раз.` : '.')};
 }
 
 /** @param {Env} env @param {string} admin @returns {Promise<number[]>} */
@@ -168,26 +180,20 @@ async function draft(env, msg) {
   const sent = await api(env, 'sendMessage', {chat_id: msg.chat.id, text});
   if (!sent.ok) return {method: 'sendMessage', chat_id: msg.chat.id, text: `Черновик не создан: ${sent.description || 'ошибка Telegram'}`};
   await env.KV.put(`draft:${sent.result.message_id}`, '[]', {expirationTtl: 30 * DAY});
-  return {method: 'sendMessage', chat_id: msg.chat.id, text: `Так сообщение увидят игроки (${n}). Чтобы разослать, ответь на него командой /send.` + (n > MAX_BROADCAST ? ` За один раз уйдёт ${MAX_BROADCAST}, остальным - повторным /send на тот же черновик.` : '')};
+  return {method: 'sendMessage', chat_id: msg.chat.id, text: `Так сообщение увидят игроки (${n}). Чтобы разослать, ответь на него командой /send.`};
 }
 
 /** @param {Env} env @param {any} msg @returns {Promise<object>} */
 async function broadcast(env, msg) {
   const src = msg.reply_to_message, reply = (/** @type {string} */ text) => ({method: 'sendMessage', chat_id: msg.chat.id, text});
-  const gift = src && env.KV ? await env.KV.get(`give:${src.message_id}`) : null;
-  if (gift !== null) return giveAll(env, msg, `give:${src.message_id}`, JSON.parse(gift));
   const key = `draft:${src?.message_id}`, saved = src?.text && env.KV ? await env.KV.get(key) : null;
-  if (saved === null) return reply('Ответь командой /send на черновик, который прислал бот после /all, /gift all или /bless all.');
-  const done = new Set(JSON.parse(saved));
-  const ids = (await audience(env, env.ADMIN)).filter(id => !done.has(id)), batch = ids.slice(0, MAX_BROADCAST);
-  let ok = 0;
-  for (const id of batch) {
-    done.add(id);
-    if ((await api(env, 'sendMessage', {chat_id: id, text: src.text})).ok) ok++;
-  }
-  await env.KV.put(key, JSON.stringify([...done]), {expirationTtl: 30 * DAY});
-  const left = ids.length - batch.length;
-  return reply(`Разослано: ${ok} из ${batch.length}` + (batch.length > ok ? ' (остальные закрыли бота)' : '') + (left ? `. Осталось ${left}: ответь /send на тот же черновик ещё раз.` : '.'));
+  if (saved === null) return reply('Ответь командой /send на черновик, который прислал бот после /all.');
+  const job = `all:${src.message_id}`;
+  await enqueue(env, job, await audience(env, env.ADMIN), src.text);
+  await pump(env);
+  const s = await progress(env, job);
+  if (s.waiting) return reply(`Отправлено ${s.ok} из ${s.total}, остальным разошлю сам в ближайшие минуты и напишу, когда закончу.`);
+  return reply(`Разослано: ${s.ok} из ${s.total}` + (s.total > s.ok ? ' (остальные закрыли бота)' : '') + '.');
 }
 
 /** @param {Env} env @param {any} msg @returns {Promise<object|null>} */
@@ -286,6 +292,10 @@ async function store(env, user, text) {
 }
 
 export default {
+  /** @param {any} controller @param {Env} env @param {{waitUntil:(p:Promise<unknown>) => void}} ctx */
+  scheduled(controller, env, ctx) {
+    ctx.waitUntil(tick(env));
+  },
   /** @param {Request} req @param {Env} env @returns {Promise<Response>} */
   async fetch(req, env) {
     const url = new URL(req.url);

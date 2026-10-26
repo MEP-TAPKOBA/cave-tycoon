@@ -1,0 +1,2 @@
+CREATE TABLE IF NOT EXISTS outbox (job TEXT NOT NULL, user_id INTEGER NOT NULL, text TEXT NOT NULL, state INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (job, user_id));
+CREATE INDEX IF NOT EXISTS outbox_wait ON outbox (state);

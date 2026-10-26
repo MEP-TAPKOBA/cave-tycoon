@@ -155,8 +155,9 @@ test('битый сейв: 400', async () => {
   assert.equal(r.status, 400);
 });
 
-/** @param {number} chat @param {string} text @returns {Promise<any>} */
-const say = (chat, text) => hook({message: {from: {id: chat, first_name: 'Деня'}, chat: {id: chat}, message_id: 1, text}}).then(r => r.status === 200 && r.headers.get('content-type')?.includes('json') ? r.json() : null);
+let messageNo = 0;
+/** @param {number} chat @param {string} text @param {number} [id] @returns {Promise<any>} */
+const say = (chat, text, id = ++messageNo) => hook({message: {from: {id: chat, first_name: 'Деня'}, chat: {id: chat}, message_id: id, text}}).then(r => r.status === 200 && r.headers.get('content-type')?.includes('json') ? r.json() : null);
 
 test('подарок ракушек командой /gift: игрок получает при входе, защита его учитывает', async () => {
   const r = await say(7, `/gift ${USER.id} 50`);
@@ -247,7 +248,40 @@ test('рассылка: черновик, /send ответом на него, п
   assert.match((await answer(draft)).text, /^Разослано: 2 из 3 \(остальные закрыли бота\)\.$/);
   assert.deepEqual(calls.map(c => c.body.chat_id), [55, 56, 57]);
   calls = [];
-  assert.match((await answer(draft)).text, /^Разослано: 0 из 0\.$/);
+  assert.match((await answer(draft)).text, /^Разослано: 2 из 3 \(остальные закрыли бота\)\.$/);
+  assert.equal(calls.length, 0);
+});
+
+/** @returns {Promise<void>} */
+async function cron() {
+  /** @type {Promise<unknown>[]} */
+  const jobs = [];
+  worker.scheduled({}, env, {waitUntil: p => void jobs.push(p)});
+  await Promise.all(jobs);
+}
+
+test('рассылка больше 45: один /send, остальным бот досылает сам по расписанию и пишет Дене', async () => {
+  const ids = Array.from({length: 100}, (_, i) => 1000 + i);
+  for (const id of [7, ...ids]) db.prepare('INSERT INTO players (id) VALUES (?)').run(id);
+  blocked.add(1099);
+  calls = [];
+  await say(7, '/all Новая версия!');
+  const draft = {message_id: 100 + 1, from: {is_bot: true}, text: 'Новая версия!'};
+  calls = [];
+  assert.equal((await answer(draft)).text, 'Отправлено 45 из 100, остальным разошлю сам в ближайшие минуты и напишу, когда закончу.');
+  assert.equal(calls.length, 45);
+  calls = [];
+  await cron();
+  assert.equal(calls.length, 45);
+  assert.ok(calls.every(c => c.body.chat_id !== 7));
+  calls = [];
+  await cron();
+  assert.deepEqual(calls.map(c => c.body.chat_id), [...ids.slice(90), '7']);
+  assert.equal(calls.at(-1).body.text, 'Рассылка закончена: дошло до 99 из 100.');
+  calls = [];
+  await cron();
+  assert.equal(calls.length, 0);
+  assert.match((await answer(draft)).text, /^Разослано: 99 из 100/);
   assert.equal(calls.length, 0);
 });
 
@@ -260,41 +294,41 @@ test('рассылка: /send не на черновик и чужие кома�
   assert.equal(calls.length, 0);
 });
 
-test('/gift all: черновик, раздача частями по /send, никому дважды', async () => {
+test('/gift all: подарок всем сразу, без черновика; сообщения больше 45 бот досылает сам', async () => {
   const ids = Array.from({length: 50}, (_, i) => 1000 + i);
   for (const id of [7, ...ids]) db.prepare('INSERT INTO players (id) VALUES (?)').run(id);
   blocked.add(1003);
   calls = [];
   const r = await say(7, '/gift all 20');
-  assert.match(r.text, /^Чтобы раздать подарок, ответь на черновик командой \/send\. За один раз получат 45/);
-  assert.match(calls[0].body.text, /^Подарок всем игрокам \(50\): 20 ракушек\./);
-  const draft = {message_id: 100 + 1, from: {is_bot: true}, text: calls[0].body.text};
-  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM pays').get().n, 0);
-  calls = [];
-  assert.match((await answer(draft)).text, /^Подарено: 45, сообщение дошло до 44\. Осталось 5/);
+  assert.equal(r.text, 'Подарено всем игрокам (50): 20 ракушек. Сообщение дошло до 44, остальным 5 напишу сам в ближайшие минуты.');
   assert.equal(calls.length, 45);
   calls = [];
-  assert.match((await answer(draft)).text, /^Подарено: 5, сообщение дошло до 5\.$/);
-  assert.deepEqual(calls.map(c => c.body.chat_id), ids.slice(45));
-  assert.match((await answer(draft)).text, /^Подарено: 0/);
+  await cron();
+  assert.deepEqual(calls.map(c => c.body.chat_id), [...ids.slice(45), '7']);
+  assert.equal(calls.at(-1).body.text, 'Сообщения о подарке разосланы: дошло до 49 из 50.');
   assert.equal(db.prepare("SELECT COUNT(*) AS n FROM pays WHERE item = 'gift:20' AND user_id != 7").get().n, 50);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM pays WHERE user_id = 7').get().n, 0);
+  assert.equal(kv.size, 0);
+  calls = [];
+  await say(7, '/gift all 20');
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM pays WHERE item = 'gift:20'").get().n, 100);
+  assert.equal(calls.length, 45);
 });
 
-test('/bless all: повтор после сбоя записи не продлевает подписку дважды', async () => {
+test('/bless all: подписка всем сразу; повтор того же сообщения от Telegram не дарит дважды', async () => {
   for (const id of [7, 55, 56]) await say(id, '/start');
   calls = [];
-  await say(7, '/bless all 5');
-  const draft = {message_id: 100 + 1, from: {is_bot: true}, text: calls[0].body.text};
-  const fresh = kv.get('give:101');
-  assert.match((await answer(draft)).text, /^Подарено: 2, сообщение дошло до 2\.$/);
+  const r = await say(7, '/bless all 5', 500);
+  assert.equal(r.text, 'Подарено всем игрокам (2): Благословение шамана на 5 дней. Сообщение дошло до 2.');
   const until = () => /** @type {any} */ (db.prepare('SELECT bless_until FROM players WHERE id = 55').get()).bless_until;
   const first = until();
   assert.ok(Math.abs(first - (Date.now() + 5 * 864e5)) < 5e3);
-  kv.set('give:101', fresh);
-  await answer(draft);
+  await say(7, '/bless all 5', 500);
   assert.equal(until(), first);
   assert.equal(/** @type {any} */ (db.prepare('SELECT bless_until FROM players WHERE id = 7').get()).bless_until, 0);
   assert.equal(db.prepare("SELECT COUNT(*) AS n FROM pays WHERE item = 'bless:5'").get().n, 2);
+  await say(7, '/bless all 5');
+  assert.ok(Math.abs(until() - (first + 5 * 864e5)) < 5e3);
 });
 
 /** @param {{id:number,first_name:string,photo_url?:string}} user @param {Partial<import('../src/core/state.js').State>} patch @returns {Promise<any>} */
