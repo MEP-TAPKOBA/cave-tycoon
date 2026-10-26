@@ -6,43 +6,44 @@
 <meta name="theme-color" content="#2E1F17">
 <title>Пещерный магнат</title>
 <script>/tgWebAppData=/.test(location.hash) && document.write('<script src="https://telegram.org/js/telegram-web-app.js"><\/script>');</script>
-<link rel="stylesheet" href="styles/base.css?v=1.2">
-<link rel="stylesheet" href="styles/hud.css?v=1.2">
-<link rel="stylesheet" href="styles/sheet.css?v=1.2">
-<link rel="stylesheet" href="styles/items.css?v=1.2">
-<link rel="stylesheet" href="styles/overlays.css?v=1.2">
+<link rel="stylesheet" href="styles/base.css?v=1.3">
+<link rel="stylesheet" href="styles/hud.css?v=1.3">
+<link rel="stylesheet" href="styles/sheet.css?v=1.3">
+<link rel="stylesheet" href="styles/items.css?v=1.3">
+<link rel="stylesheet" href="styles/overlays.css?v=1.3">
 <script type="importmap">
 {"imports": {
-  "./src/config.js": "./src/config.js?v=1.2",
-  "./src/format.js": "./src/format.js?v=1.2",
-  "./src/core/economy.js": "./src/core/economy.js?v=1.2",
-  "./src/core/formulas.js": "./src/core/formulas.js?v=1.2",
-  "./src/core/quests.js": "./src/core/quests.js?v=1.2",
-  "./src/core/state.js": "./src/core/state.js?v=1.2",
-  "./src/platform/saves.js": "./src/platform/saves.js?v=1.2",
-  "./src/platform/sound.js": "./src/platform/sound.js?v=1.2",
-  "./src/platform/stars.js": "./src/platform/stars.js?v=1.2",
-  "./src/platform/telegram.js": "./src/platform/telegram.js?v=1.2",
-  "./src/data/achs.js": "./src/data/achs.js?v=1.2",
-  "./src/data/chapters.js": "./src/data/chapters.js?v=1.2",
-  "./src/data/shop.js": "./src/data/shop.js?v=1.2",
-  "./src/data/techs.js": "./src/data/techs.js?v=1.2",
-  "./src/data/units.js": "./src/data/units.js?v=1.2",
-  "./src/data/valleys.js": "./src/data/valleys.js?v=1.2",
-  "./src/game.js": "./src/game.js?v=1.2",
-  "./src/scene/beasts.js": "./src/scene/beasts.js?v=1.2",
-  "./src/scene/farm.js": "./src/scene/farm.js?v=1.2",
-  "./src/scene/fx.js": "./src/scene/fx.js?v=1.2",
-  "./src/scene/people.js": "./src/scene/people.js?v=1.2",
-  "./src/scene/scene.js": "./src/scene/scene.js?v=1.2",
-  "./src/scene/view.js": "./src/scene/view.js?v=1.2",
-  "./src/ui/dom.js": "./src/ui/dom.js?v=1.2",
-  "./src/ui/lists.js": "./src/ui/lists.js?v=1.2",
-  "./src/ui/progress.js": "./src/ui/progress.js?v=1.2",
-  "./src/ui/rating.js": "./src/ui/rating.js?v=1.2",
-  "./src/ui/session.js": "./src/ui/session.js?v=1.2",
-  "./src/ui/shop.js": "./src/ui/shop.js?v=1.2",
-  "./src/ui/tutorial.js": "./src/ui/tutorial.js?v=1.2"
+  "./src/config.js": "./src/config.js?v=1.3",
+  "./src/format.js": "./src/format.js?v=1.3",
+  "./src/core/economy.js": "./src/core/economy.js?v=1.3",
+  "./src/core/formulas.js": "./src/core/formulas.js?v=1.3",
+  "./src/core/quests.js": "./src/core/quests.js?v=1.3",
+  "./src/core/state.js": "./src/core/state.js?v=1.3",
+  "./src/platform/saves.js": "./src/platform/saves.js?v=1.3",
+  "./src/platform/sound.js": "./src/platform/sound.js?v=1.3",
+  "./src/platform/stars.js": "./src/platform/stars.js?v=1.3",
+  "./src/platform/telegram.js": "./src/platform/telegram.js?v=1.3",
+  "./src/data/achs.js": "./src/data/achs.js?v=1.3",
+  "./src/data/chapters.js": "./src/data/chapters.js?v=1.3",
+  "./src/data/shop.js": "./src/data/shop.js?v=1.3",
+  "./src/data/techs.js": "./src/data/techs.js?v=1.3",
+  "./src/data/units.js": "./src/data/units.js?v=1.3",
+  "./src/data/valleys.js": "./src/data/valleys.js?v=1.3",
+  "./src/game.js": "./src/game.js?v=1.3",
+  "./src/scene/beasts.js": "./src/scene/beasts.js?v=1.3",
+  "./src/scene/farm.js": "./src/scene/farm.js?v=1.3",
+  "./src/scene/fx.js": "./src/scene/fx.js?v=1.3",
+  "./src/scene/people.js": "./src/scene/people.js?v=1.3",
+  "./src/scene/scene.js": "./src/scene/scene.js?v=1.3",
+  "./src/scene/view.js": "./src/scene/view.js?v=1.3",
+  "./src/ui/dom.js": "./src/ui/dom.js?v=1.3",
+  "./src/ui/lists.js": "./src/ui/lists.js?v=1.3",
+  "./src/ui/progress.js": "./src/ui/progress.js?v=1.3",
+  "./src/ui/rating.js": "./src/ui/rating.js?v=1.3",
+  "./src/ui/session.js": "./src/ui/session.js?v=1.3",
+  "./src/ui/settings.js": "./src/ui/settings.js?v=1.3",
+  "./src/ui/shop.js": "./src/ui/shop.js?v=1.3",
+  "./src/ui/tutorial.js": "./src/ui/tutorial.js?v=1.3"
 }}
 </script>
 </head>
@@ -56,8 +57,7 @@
     </div>
     <div class="tools">
       <button id="shells" class="round shells" aria-label="Лавка шамана"><img src="assets/twemoji/1f41a.svg" alt=""><span id="shellCount">0</span></button>
-      <button id="music" class="round" aria-label="Музыка"><img src="assets/twemoji/1f941.svg" alt=""></button>
-      <button id="mute" class="round" aria-label="Звуки"><img id="muteIcon" src="assets/twemoji/1f50a.svg" alt=""></button>
+      <button id="gear" class="round" aria-label="Настройки"><img src="assets/twemoji/2699.svg" alt=""></button>
       <button id="rank" class="round" aria-label="Рейтинг вождей" hidden><img src="assets/twemoji/1f451.svg" alt=""></button>
     </div>
     <div id="active" class="active"></div>
@@ -75,7 +75,6 @@
         <h2>Достижения <span id="achCount"></span></h2>
         <section id="achs"></section>
         <button id="tutAgain">Пройти обучение заново</button>
-        <button id="buzz" hidden></button>
         <button id="reset">Начать заново</button>
         <div id="credit">Графика: Twemoji, CC-BY 4.0</div>
       </div>
@@ -83,6 +82,7 @@
       <div class="sec" data-sec="tribe"><h2>Места в пещере <span id="staff"></span></h2><section id="workers"></section></div>
       <div class="sec" data-sec="farm"><div id="farmNote" class="note"><img src="assets/twemoji/1f33e.svg" alt=""><span id="farmText"></span></div><h2>Хлев <span id="herd"></span></h2><section id="farm"></section></div>
       <div class="sec" data-sec="shop"><div class="note"><img src="assets/twemoji/1f41a.svg" alt=""><span id="shopText"></span></div><section id="boosts"></section><div id="starShop" hidden><h2>За звёзды</h2><section id="stars"></section></div></div>
+      <div class="sec" data-sec="settings"><div class="note"><img src="assets/twemoji/1f4a7.svg" alt=""><span>Чтобы потушить костёр, подержи на нём палец.</span></div><section id="settings"></section></div>
       <div class="sec" data-sec="rank"><div class="note"><img src="assets/twemoji/1f451.svg" alt=""><span id="rankText"></span></div><section id="ranks"></section><button id="hideRank"></button></div>
       <div class="sec" data-sec="techs"><h2>Сделано <span id="techCount"></span></h2><div id="allTechs" class="note"><img src="assets/twemoji/1f3a8.svg" alt=""><span>Все открытия изучены! Ниже то, что уже работает на племя.</span></div><section id="techs"></section><h2 id="doneHead">Изучено</h2><section id="techsDone"></section></div>
     </div>
@@ -99,6 +99,6 @@
   <div id="story" hidden><div class="story-card"><img id="storyIcon" alt=""><b id="storyTitle"></b><p id="storyText"></p><button id="storyNext"></button></div></div>
   <div id="fade"></div>
 </div>
-<script type="module" src="src/main.js?v=1.2"></script>
+<script type="module" src="src/main.js?v=1.3"></script>
 </body>
 </html>

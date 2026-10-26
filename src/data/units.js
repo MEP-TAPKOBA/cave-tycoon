@@ -10,8 +10,8 @@ export const STATIONS = [
 /** @type {Def[]} */
 export const WORKERS = [
   {id: 'hunter', name: 'Охотник', icon: '1f3f9', base: 50, growth: 1.085, trip: 80 / 3, time: 10, tech: 'spears', color: '#C1694F', unit: 'мяса/с'},
-  {id: 'tracker', name: 'Следопыт', from: 'hunter', icon: '1f43e', base: 1000, growth: 1.085, trip: 400, time: 12, tech: 'traps', color: '#77B255', unit: 'мяса/с'},
-  {id: 'chief', name: 'Вождь охоты', from: 'tracker', icon: '1fab6', base: 20000, growth: 1.085, trip: 3200, time: 14, tech: 'horns', color: '#DD2E44', unit: 'мяса/с'},
+  {id: 'tracker', name: 'Следопыт', from: 'hunter', icon: '1f43e', base: 1000, growth: 1.1275, trip: 400, time: 12, tech: 'traps', color: '#77B255', unit: 'мяса/с'},
+  {id: 'chief', name: 'Вождь охоты', from: 'tracker', icon: '1fab6', base: 20000, growth: 1.12, trip: 3200, time: 14, tech: 'horns', color: '#DD2E44', unit: 'мяса/с'},
 ];
 /** @type {Def[]} */
 export const FARM = [

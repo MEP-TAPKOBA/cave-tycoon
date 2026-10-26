@@ -1,4 +1,5 @@
-import {SAVE_EPOCH} from '../src/config.js';
+import {BLESS_BOOST, BLESS_GIFT, SAVE_EPOCH} from '../src/config.js';
+import {pct, plural} from '../src/format.js';
 import {STAR_ITEMS} from '../src/data/shop.js';
 import {judge, ledgerOf} from '../src/core/check.js';
 import {rankScore} from '../src/core/quests.js';
@@ -8,6 +9,7 @@ import {ahead, parseSave} from '../src/core/state.js';
 /** @typedef {{item:string,charge:string,stars:number,at:number,given:boolean}} Pay */
 /** @typedef {{id:number,first_name?:string,last_name?:string,username?:string,photo_url?:string}} User */
 /** @typedef {{TOKEN:string,HOOK:string,GAME:string,ADMIN?:string,KV?:any,DB:any}} Env */
+/** @typedef {{item:string,days:number,what:string,text:string}} Present */
 
 const DAY = 24 * 3600;
 const INIT_TTL = 24 * 3600;
@@ -21,8 +23,10 @@ const itemOf = id => STAR_ITEMS.find(i => i.id === id);
 
 const SUPPORT = 'Вопросы по покупкам в «Пещерном магнате»: напиши сюда, что купил, когда и что пошло не так. Ответим и, если покупка не пришла, вернём звёзды.';
 const HELLO = 'Привет, вождь! Племя ждёт: костёр не разожжён, а мамонты бродят совсем рядом.\n\nЖми «Играть», чтобы открыть «Пещерного магната». Прогресс сохраняется на сервере игры, так что играть можно и с телефона, и с компьютера.\n\nВопросы по покупкам: /paysupport';
-const GIFT_USAGE = 'Формат: /gift <номер игрока> <сколько ракушек>, например /gift 123456789 50';
+const GIFT_USAGE = 'Формат: /gift <номер игрока> <сколько ракушек>, например /gift 123456789 50. Всем игрокам: /gift all 50';
 const MAX_GIFT = 10000;
+const BLESS_USAGE = 'Формат: /bless <номер игрока> <сколько дней>, например /bless 123456789 7. Всем игрокам: /bless all 7';
+const MAX_BLESS_DAYS = 365;
 const ALL_USAGE = 'Формат: /all <текст рассылки>. Бот покажет черновик, отправка - ответом /send на него.';
 const MAX_BROADCAST = 45;
 const PASSED = 'Сообщение передано. Ответим здесь же, в этом чате.';
@@ -61,7 +65,7 @@ async function ensurePlayer(env, id) {
   /** @type {Pay[]} */
   const pays = old?.pays || [];
   await env.DB.batch([
-    env.DB.prepare('INSERT OR IGNORE INTO players (id, keeper, bless_until) VALUES (?, ?, ?)').bind(id, old?.keeper ? 1 : 0, old?.blessUntil || 0),
+    env.DB.prepare('INSERT OR IGNORE INTO players (id, keeper, bless_until, paid_until) VALUES (?, ?, ?, ?)').bind(id, old?.keeper ? 1 : 0, old?.blessUntil || 0, old?.blessUntil || 0),
     ...pays.map(p => env.DB.prepare('INSERT OR IGNORE INTO pays (charge, user_id, item, stars, at, given) VALUES (?, ?, ?, ?, ?, ?)').bind(p.charge, id, p.item, p.stars, p.at, p.given ? 1 : 0)),
   ]);
 }
@@ -88,22 +92,65 @@ async function paid(env, msg) {
   await ensurePlayer(env, id);
   const stmts = [env.DB.prepare('INSERT OR IGNORE INTO pays (charge, user_id, item, stars, at, given) VALUES (?, ?, ?, ?, ?, 0)').bind(pay.telegram_payment_charge_id, id, item, pay.total_amount, Date.now())];
   if (it?.once) stmts.push(env.DB.prepare('UPDATE players SET keeper = 1 WHERE id = ?').bind(id));
-  if (it?.days) stmts.push(env.DB.prepare('UPDATE players SET bless_until = MAX(bless_until, ?) WHERE id = ?').bind((pay.subscription_expiration_date || Date.now() / 1000 + it.days * DAY) * 1000, id));
+  if (it?.days) {
+    const until = (pay.subscription_expiration_date || Date.now() / 1000 + it.days * DAY) * 1000;
+    stmts.push(env.DB.prepare('UPDATE players SET bless_until = ? + MAX(0, bless_until - MAX(paid_until, ?)), paid_until = MAX(paid_until, ?) WHERE id = ?').bind(until, Date.now(), until, id));
+  }
   await env.DB.batch(stmts);
   if (!env.ADMIN) return;
   const kind = pay.is_first_recurring ? ' (первая оплата)' : pay.is_recurring ? ' (продление)' : '';
   await api(env, 'sendMessage', {chat_id: env.ADMIN, text: `Покупка: ${it?.name || item}${kind}, ${pay.total_amount} звёзд.\n${nameOf(msg.from)}, игрок #id${id}`}).catch(() => null);
 }
 
-/** @param {Env} env @param {any} msg @returns {Promise<object>} */
-async function gift(env, msg) {
-  const [, to, n] = String(msg.text).trim().split(/\s+/).map(Number);
+/** @param {number} n @returns {Present} */
+const shellsPresent = n => ({item: `gift:${n}`, days: 0, what: plural(n, ['ракушка', 'ракушки', 'ракушек']), text: `Шаман прислал тебе ракушки: ${n}. Загляни в игру, они уже ждут!`});
+
+/** @param {number} days @returns {Present} */
+const blessPresent = days => ({item: `bless:${days}`, days, what: `Благословение шамана на ${plural(days, ['день', 'дня', 'дней'])}`, text: `Шаман благословил тебя на ${plural(days, ['день', 'дня', 'дней'])}: +${pct(BLESS_BOOST - 1)}% ко всей добыче и ${BLESS_GIFT} ракушек каждый день. Загляни в игру!`});
+
+/** @param {Env} env @param {number} id @param {Present} p @param {string} charge @param {number} now @returns {any[]} */
+const presentTo = (env, id, p, charge, now) => [
+  ...(p.days ? [env.DB.prepare('UPDATE players SET bless_until = MAX(bless_until, ?) + ? WHERE id = ? AND NOT EXISTS (SELECT 1 FROM pays WHERE charge = ?)').bind(now, p.days * DAY * 1000, id, charge)] : []),
+  env.DB.prepare('INSERT OR IGNORE INTO pays (charge, user_id, item, stars, at, given) VALUES (?, ?, ?, 0, ?, 0)').bind(charge, id, p.item, now),
+];
+
+/** @param {Env} env @param {any} msg @param {string} usage @param {number} max @param {(n:number) => Present} make @returns {Promise<object>} */
+async function present(env, msg, usage, max, make) {
+  const [, who, count] = String(msg.text).trim().split(/\s+/), to = Number(who), n = Number(count);
   const reply = (/** @type {string} */ text) => ({method: 'sendMessage', chat_id: msg.chat.id, text});
-  if (!Number.isInteger(to) || to <= 0 || !Number.isInteger(n) || n < 1 || n > MAX_GIFT) return reply(GIFT_USAGE);
+  if (!Number.isInteger(n) || n < 1 || n > max || (who !== 'all' && (!Number.isInteger(to) || to <= 0))) return reply(usage);
+  const p = make(n);
+  if (who === 'all') return offerAll(env, msg, p);
   await ensurePlayer(env, to);
-  await env.DB.prepare('INSERT INTO pays (charge, user_id, item, stars, at, given) VALUES (?, ?, ?, 0, ?, 0)').bind(`gift-${crypto.randomUUID()}`, to, `gift:${n}`, Date.now()).run();
-  const r = await api(env, 'sendMessage', {chat_id: to, text: `Шаман прислал тебе ракушки: ${n}. Загляни в игру, они уже ждут!`});
-  return reply(`Подарено ${n} ракушек игроку #id${to}. Получит при входе в игру.` + (r.ok ? '' : ' Сообщение игроку не дошло: он ещё не писал боту.'));
+  await env.DB.batch(presentTo(env, to, p, `gift-${crypto.randomUUID()}`, Date.now()));
+  const r = await api(env, 'sendMessage', {chat_id: to, text: p.text});
+  return reply(`Подарено игроку #id${to}: ${p.what}. Получит при входе в игру.` + (r.ok ? '' : ' Сообщение игроку не дошло: он ещё не писал боту.'));
+}
+
+/** @param {Env} env @param {any} msg @param {Present} p @returns {Promise<object>} */
+async function offerAll(env, msg, p) {
+  const reply = (/** @type {string} */ text) => ({method: 'sendMessage', chat_id: msg.chat.id, text});
+  if (!env.KV) return reply('Подарок всем не работает: у сервера нет KV.');
+  const n = (await audience(env, env.ADMIN)).length;
+  const sent = await api(env, 'sendMessage', {chat_id: msg.chat.id, text: `Подарок всем игрокам (${n}): ${p.what}.\n\nКаждый получит сообщение:\n${p.text}`});
+  if (!sent.ok) return reply(`Черновик не создан: ${sent.description || 'ошибка Telegram'}`);
+  await env.KV.put(`give:${sent.result.message_id}`, JSON.stringify({...p, done: []}), {expirationTtl: 30 * DAY});
+  return reply('Чтобы раздать подарок, ответь на черновик командой /send.' + (n > MAX_BROADCAST ? ` За один раз получат ${MAX_BROADCAST}, остальные - повторным /send на тот же черновик.` : ''));
+}
+
+/** @param {Env} env @param {any} msg @param {string} key @param {Present & {done:number[]}} p @returns {Promise<object>} */
+async function giveAll(env, msg, key, p) {
+  const done = new Set(p.done), now = Date.now();
+  const ids = (await audience(env, env.ADMIN)).filter(id => !done.has(id)), batch = ids.slice(0, MAX_BROADCAST);
+  if (batch.length) await env.DB.batch(batch.flatMap(id => presentTo(env, id, p, `${key}:${id}`, now)));
+  let ok = 0;
+  for (const id of batch) {
+    done.add(id);
+    if ((await api(env, 'sendMessage', {chat_id: id, text: p.text})).ok) ok++;
+  }
+  await env.KV.put(key, JSON.stringify({...p, done: [...done]}), {expirationTtl: 30 * DAY});
+  const left = ids.length - batch.length;
+  return {method: 'sendMessage', chat_id: msg.chat.id, text: `Подарено: ${batch.length}, сообщение дошло до ${ok}` + (left ? `. Осталось ${left}: ответь /send на тот же черновик ещё раз.` : '.')};
 }
 
 /** @param {Env} env @param {string} admin @returns {Promise<number[]>} */
@@ -127,8 +174,10 @@ async function draft(env, msg) {
 /** @param {Env} env @param {any} msg @returns {Promise<object>} */
 async function broadcast(env, msg) {
   const src = msg.reply_to_message, reply = (/** @type {string} */ text) => ({method: 'sendMessage', chat_id: msg.chat.id, text});
+  const gift = src && env.KV ? await env.KV.get(`give:${src.message_id}`) : null;
+  if (gift !== null) return giveAll(env, msg, `give:${src.message_id}`, JSON.parse(gift));
   const key = `draft:${src?.message_id}`, saved = src?.text && env.KV ? await env.KV.get(key) : null;
-  if (saved === null) return reply('Ответь командой /send на черновик, который прислал бот после /all.');
+  if (saved === null) return reply('Ответь командой /send на черновик, который прислал бот после /all, /gift all или /bless all.');
   const done = new Set(JSON.parse(saved));
   const ids = (await audience(env, env.ADMIN)).filter(id => !done.has(id)), batch = ids.slice(0, MAX_BROADCAST);
   let ok = 0;
@@ -175,7 +224,8 @@ async function hook(env, u) {
     return {method: 'sendMessage', chat_id: msg.chat.id, text: HELLO, reply_markup: {inline_keyboard: [[{text: 'Играть', web_app: {url: env.GAME}}]]}};
   }
   const admin = Boolean(env.ADMIN) && String(msg.chat.id) === env.ADMIN;
-  if (admin && text.startsWith('/gift')) return gift(env, msg);
+  if (admin && text.startsWith('/gift')) return present(env, msg, GIFT_USAGE, MAX_GIFT, shellsPresent);
+  if (admin && text.startsWith('/bless')) return present(env, msg, BLESS_USAGE, MAX_BLESS_DAYS, blessPresent);
   if (admin && text.startsWith('/all')) return draft(env, msg);
   if (admin && text.startsWith('/send')) return broadcast(env, msg);
   if (text.startsWith('/')) return null;

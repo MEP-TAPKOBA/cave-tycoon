@@ -1,15 +1,16 @@
 import {num} from '../format.js';
-import {cap, lvl, opened, perTap} from '../core/formulas.js';
-import {heatTick, stokeHeat, tapped} from '../core/economy.js';
-import {beep, buzz, gain, world} from '../game.js';
+import {boostOn, cap, lvl, opened, perkOn, perTap} from '../core/formulas.js';
+import {doused, heatTick, stokeHeat, tapped} from '../core/economy.js';
+import {beep, buzz, gain, sizzle, world} from '../game.js';
 import {bubble, CAVE, ctx, FH, glow, H, hits, mix, pill, shade, sign, spotOf, sprite, spriteAt, tag, theme, treeKind, U, W} from './view.js';
 import {burst, drawFx, floater, fly, fxTick, particles} from './fx.js';
 import {drawWalker, folkDepth, keeperDepth, keeperTick, kidsDepth, kidsTick, moveWalker, walkers, walkerY} from './people.js';
 import {critters, drawFarm, farmTick} from './farm.js';
 import {catchMammoth, drawMammoth, drawTiger, hitTiger, mammoth, mammothTick, resetBeasts, tiger, tigerTick} from './beasts.js';
-import {bump} from '../ui/dom.js';
+import {banner, bump} from '../ui/dom.js';
 
-let smokeT = 0, steamT = 0, weatherT = 0;
+const POUR_AFTER = .6;
+let smokeT = 0, steamT = 0, weatherT = 0, pressT = -1, pouring = false, dropT = 0;
 
 const stars = Array.from({length: 40}, () => [Math.random(), Math.random() * .4, Math.random() * 1.4 + .4]);
 const clouds = [[.1, .1, 1], [.5, .2, .7], [.8, .07, 1.2], [1.15, .26, .9]];
@@ -36,6 +37,85 @@ function stoke() {
   buzz(5);
 }
 
+function startPour() {
+  const f = spotOf('fire');
+  if (world.heat <= 0) return void (pressT = -1);
+  if (boostOn(world, 'feast')) {
+    pressT = -1;
+    return floater(f.x, f.y - 55 * U, 'Праздник: огонь не потушить', '#9fd3ff', 13);
+  }
+  pouring = true;
+  if (perkOn(world, 'keeper') && !world.state.keeperOff) banner('Хранитель огня уснул', '1fab5');
+  sizzle(.5);
+  buzz(10);
+}
+
+/** @param {number} dt */
+function pourTick(dt) {
+  if (pressT < 0) return;
+  pressT += dt;
+  if (!pouring && pressT >= POUR_AFTER) startPour();
+  if (!pouring) return;
+  const f = spotOf('fire');
+  world.heat = doused(world, dt);
+  dropT -= dt;
+  if (dropT < 0) {
+    dropT = .05;
+    particles.push({kind: 'dot', x: f.x + (Math.random() - .5) * 10 * U, y: f.y - 8 * U, vx: (Math.random() - .5) * 120, vy: -60 - Math.random() * 80, grav: 500, life: .5, max: .5, size: (1.5 + Math.random()) * U, color: '#9fd3ff'});
+    particles.push({kind: 'smoke', x: f.x + (Math.random() - .5) * 16 * U, y: f.y - 14 * U, vx: (Math.random() - .5) * 14, vy: -30 * U, life: 1.6, max: 1.6, size: 5 * U, color: '#ffffff'});
+  }
+  if (world.heat > 0) return;
+  release();
+  for (let i = 0; i < 10; i++) particles.push({kind: 'smoke', x: f.x + (Math.random() - .5) * 30 * U, y: f.y - 10 * U, vx: (Math.random() - .5) * 30, vy: -(20 + Math.random() * 20) * U, life: 2.4, max: 2.4, size: 7 * U, color: '#ffffff'});
+  floater(f.x, f.y - 55 * U, 'Костёр потушен', '#9fd3ff', 14);
+  sizzle(1.4);
+  buzz(20);
+}
+
+export function release() {
+  pressT = -1;
+  pouring = false;
+}
+
+/** @param {number} t */
+function drawPour(t) {
+  const f = spotOf('fire'), x0 = f.x + 10 * U, y0 = f.y - 92 * U, y1 = f.y - 6 * U;
+  ctx.strokeStyle = 'rgba(93,173,236,.75)';
+  ctx.lineCap = 'round';
+  for (let i = 0; i < 6; i++) {
+    const a = y0 + (y1 - y0) * i / 6, b = y0 + (y1 - y0) * (i + 1) / 6;
+    ctx.lineWidth = (5 - i * .5) * U;
+    ctx.beginPath();
+    ctx.moveTo(x0 - (x0 - f.x) * i / 6 + Math.sin(t * 30 + i) * U, a);
+    ctx.lineTo(x0 - (x0 - f.x) * (i + 1) / 6 + Math.sin(t * 30 + i + 1) * U, b);
+    ctx.stroke();
+  }
+  ctx.save();
+  ctx.translate(x0 + 8 * U, y0 - 6 * U);
+  ctx.rotate(-2.21 + Math.sin(t * 6) * .04);
+  ctx.fillStyle = '#A0522D';
+  ctx.beginPath();
+  ctx.moveTo(-9 * U, -10 * U);
+  ctx.lineTo(9 * U, -10 * U);
+  ctx.lineTo(7 * U, 10 * U);
+  ctx.lineTo(-7 * U, 10 * U);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#662113';
+  ctx.lineWidth = 2 * U;
+  ctx.beginPath();
+  ctx.moveTo(-8.5 * U, -4 * U);
+  ctx.lineTo(8.5 * U, -4 * U);
+  ctx.moveTo(-7.5 * U, 5 * U);
+  ctx.lineTo(7.5 * U, 5 * U);
+  ctx.stroke();
+  ctx.fillStyle = '#5DADEC';
+  ctx.beginPath();
+  ctx.ellipse(0, -10 * U, 9 * U, 3 * U, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
 /** @param {number} dt */
 export function update(dt) {
   walkers.forEach(w => moveWalker(w, dt));
@@ -48,6 +128,7 @@ export function update(dt) {
   }
   mammothTick(dt);
   world.heat = heatTick(world, dt, world.night);
+  pourTick(dt);
   tigerTick(dt);
   smokeT -= dt;
   if (smokeT < 0) {
@@ -158,6 +239,7 @@ function drawStations(t) {
   if (world.heat < 25) bubble(f.x - 6 * U, f.y - 40 * U, 'Дров!', t, '#F4900C');
   else if (fl) tag(f.x, f.y - r - 10 * U, `ур. ${fl}`);
   hits.push({id: 'fire', x: f.x, y: f.y - 14 * U, r: 30 * U});
+  if (pouring) drawPour(t);
 
   const k = spotOf('kitchen'), kl = lvl(world, 'kitchen');
   if (!opened(world, 'kitchen')) sprite('rock', k.x, k.y + 4 * U, 22 * U);
@@ -267,7 +349,10 @@ export function tap(x, y) {
   if (tiger && !tiger.fleeing && Math.hypot(x - tiger.xf * W, y - (tiger.lane * H - 20 * U)) < 45 * U) return hitTiger();
   if (mammoth && !mammoth.fleeing && Math.hypot(x - mammoth.xf * W, y - (mammoth.lane * H - 35 * U)) < 55 * U) return catchMammoth();
   const hit = hits.find(h => Math.hypot(x - h.x, y - h.y) < h.r);
-  if (hit?.id === 'fire') return stoke();
+  if (hit?.id === 'fire') {
+    pressT = 0;
+    return stoke();
+  }
   hunt(x, y);
 }
 
@@ -277,5 +362,6 @@ export function resetScene(mammothDelay) {
   critters.length = 0;
   particles.length = 0;
   resetBeasts(mammothDelay);
+  release();
   world.heat = 0;
 }

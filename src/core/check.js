@@ -5,7 +5,8 @@ import {GENERIC_STAGES} from '../data/chapters.js';
 import {TECHS} from '../data/techs.js';
 import {ALL} from '../data/units.js';
 import {achReward, mammothMeat, starItem} from './economy.js';
-import {cap, perSec, perTap} from './formulas.js';
+import {cap, perSec, perTap, ranked} from './formulas.js';
+import {quests, stageCount} from './quests.js';
 import {fresh} from './state.js';
 
 /** @typedef {import('./state.js').State} State */
@@ -62,12 +63,29 @@ export function gainLimit(base, ms, now) {
 /** @param {State} next @param {State} base @param {number} ms @param {number} now @returns {boolean} */
 export const paceOk = (next, base, ms, now) => next.valley <= base.valley + 1 + ms / VALLEY_EVERY && next.life.earned - base.life.earned <= gainLimit(base, ms, now);
 
+/** @param {State} s @param {number} now @returns {World} */
+const still = (s, now) => ({state: s, heat: 0, fed: 1, now});
+
+/** @param {State} s @param {number} from @param {number} now @returns {boolean} */
+export function stagesOk(s, from, now) {
+  if (s.stage > stageCount(still(s, now))) return false;
+  const w = still(s, now), levels = Object.fromEntries(ALL.map(d => [d.id, ranked(w, d.id)]));
+  for (let st = from; st < s.stage; st++) if (quests(still({...s, levels, stage: st}, now)).some(q => q.now < q.goal)) return false;
+  return true;
+}
+
+/** @param {State} next @param {State} base @param {number} now @returns {boolean} */
+export function progressOk(next, base, now) {
+  if (next.valley === base.valley) return stagesOk(next, Math.min(base.stage, next.stage), now);
+  return next.valley === base.valley + 1 && base.stage >= stageCount(still(base, now)) && stagesOk(next, 0, now);
+}
+
 /** @param {State} next @param {State|null} prev @param {number} ms @param {Ledger} ledger @param {number} now @returns {Judgment} */
 export function judge(next, prev, ms, ledger, now) {
   if (!sane(next)) return {verdict: 'reject', state: next};
   if (prev) {
     const base = prev.restarts === next.restarts ? prev : fresh(now);
-    if (!paceOk(next, base, ms, now)) return {verdict: 'reject', state: next};
+    if (!paceOk(next, base, ms, now) || !progressOk(next, base, now)) return {verdict: 'reject', state: next};
     if (!spentOk(next) && spentOk(prev)) return {verdict: 'reject', state: next};
   }
   const ceiling = Math.max(shellCeiling(next, ledger), prev && prev.restarts === next.restarts ? prev.shells : 0);

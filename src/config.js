@@ -5,6 +5,7 @@ export const BLESS_BOOST = 1.25;
 export const BLESS_GIFT = 5;
 export const HARVEST = 5 * 60;
 export const KEEPER_HEAT = 50;
+export const DOUSE_RATE = 60;
 export const AWAY_COOL = .2;
 export const MAX_SHELL_REWARD = 10;
 export const MAMMOTH_REST = 5 * 60;

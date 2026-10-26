@@ -146,7 +146,6 @@ export function renderLists() {
   const wait = Math.max(0, Math.ceil(HARVEST - world.state.harvest)), clock = `${Math.floor(wait / 60)}:${String(wait % 60).padStart(2, '0')}`;
   $('farmNote').classList.toggle('warn', hungry || spill);
   setText($('farmText'), hungry ? `Скотине не хватает пшена: растёт ${num(grainRate(world))} в минуту, а съедают ${num(grainNeed(world))}. Расширь поле!` : spill ? `Амбар вмещает ${num(grainCap(world))} пшена, а урожай ${num(harvestSize(world))}: лишнее пропадает. Расширь амбар!` : lvl(world, 'field') || herd(world) ? `Амбар: ${num(Math.floor(world.state.grain))} из ${num(grainCap(world))} · урожай +${num(harvestSize(world))} через ${clock} · едят ${num(grainNeed(world))}/мин` : 'Распаши поле и построй хлев: кролики и козы едят пшено и дают мясо');
-  $('music').classList.toggle('off', !world.state.music);
   setText($('meat'), num(Math.floor(world.state.meat)));
   setText($('cap'), `из ${num(cap(world))}`);
   $('counter').classList.toggle('full', world.state.meat >= cap(world));
@@ -172,9 +171,6 @@ export function renderLists() {
   }
   setText($('staff'), `${staff(world)} из ${seats(world)}`);
   setText($('huntText'), `Охотиться +${num(perTap(world))}`);
-  const muteSrc = icon(world.state.muted ? '1f507' : '1f50a');
-  if ($('muteIcon').getAttribute('src') !== muteSrc) $('muteIcon').setAttribute('src', muteSrc);
-  setText($('buzz'), world.state.noBuzz ? 'Включить вибрацию' : 'Выключить вибрацию');
   for (const r of rows) {
     const n = amount(world, r.def), c = costOf(world, r.def, Math.max(n, 1)), l = lvl(world, r.def.id);
     setText(r.level, l ? (r.def.trip || r.def.feed ? `×${l}` + (hurt(world, r.def.id) ? `, ранены ${hurt(world, r.def.id)}` : '') : `ур. ${l}`) : '');

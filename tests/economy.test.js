@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {BLESS_OFFLINE_CAP, KEEPER_HEAT, OFFLINE_CAP, OFFLINE_SHARE} from '../src/config.js';
+import {BLESS_OFFLINE_CAP, DOUSE_RATE, KEEPER_HEAT, OFFLINE_CAP, OFFLINE_SHARE} from '../src/config.js';
 import {up} from '../src/format.js';
 import {BOOSTS} from '../src/data/shop.js';
 import {WORKERS} from '../src/data/units.js';
-import {addMeat, claimAch, cooled, grant, heatTick, migrated, offline, purchase, purchaseBoost, restarted, shellReward} from '../src/core/economy.js';
+import {addMeat, claimAch, cooled, doused, grant, heatTick, migrated, offline, purchase, purchaseBoost, restarted, shellReward} from '../src/core/economy.js';
 import {perSec} from '../src/core/formulas.js';
 import {rankScore} from '../src/core/quests.js';
 import {NOW, at} from './world.js';
@@ -66,7 +66,7 @@ test('жар: остывание вне игры, Кремень, праздни
   assert.equal(cooled(at({techs: ['flint']}), 50, 100e3), 40);
   assert.equal(cooled(at({boosts: {feast: NOW + 1}}), 50, 1e9), 50);
   assert.equal(heatTick(at({perks: ['keeper']}, {heat: 0}), 1, 0), KEEPER_HEAT);
-  assert.equal(heatTick(at({perks: ['keeper']}, {heat: 0}), 1, .8), 0);
+  assert.equal(heatTick(at({perks: ['keeper']}, {heat: 0}), 1, .8), KEEPER_HEAT);
 });
 
 test('ракушки за переселение: 2 + 1 за две земли, не больше 10', () => {
@@ -118,6 +118,26 @@ test('подарок шамана: ракушки любого размера', 
   assert.equal(grant(w, 'gift:50').shells, 50);
   assert.equal(w.state.shells, 54);
   assert.equal(grant(w, 'gift:x'), undefined);
+});
+
+test('подарок подписки: дни без ракушек, срок приходит с сервера', () => {
+  const w = at({shells: 4});
+  assert.equal(grant(w, 'bless:7').days, 7);
+  assert.equal(w.state.shells, 4);
+});
+
+test('Хранитель днём и ночью; тушение гасит жар и усыпляет Хранителя, праздник не потушить', () => {
+  const w = at({perks: ['keeper']}, {heat: 0});
+  assert.equal(heatTick(w, 1, 1), KEEPER_HEAT);
+  w.heat = 100;
+  assert.equal(doused(w, 1), 100 - DOUSE_RATE);
+  assert.equal(w.state.keeperOff, true);
+  w.heat = 10;
+  w.heat = doused(w, 1);
+  assert.equal(w.heat, 0);
+  assert.equal(heatTick(w, 1, 0), 0);
+  const party = at({boosts: {feast: NOW + 1}}, {heat: 100});
+  assert.equal(doused(party, 1), 100);
 });
 
 test('очки рейтинга: веха 1, переселение 2; выключатель переживает переселение и сброс', () => {

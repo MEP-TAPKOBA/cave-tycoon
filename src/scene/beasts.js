@@ -1,7 +1,7 @@
 import {num} from '../format.js';
 import {boostOn, has, isScared, opened} from '../core/formulas.js';
 import {caughtMammoth, mammothMeat, raid, tigerScared} from '../core/economy.js';
-import {beep, buzz, gain, tune, world} from '../game.js';
+import {beep, buzz, gain, morse, roar, trumpet, tune, world} from '../game.js';
 import {bubble, CAVE, ctx, H, pill, sprite, sprites, U, W} from './view.js';
 import {burst, floater, fly} from './fx.js';
 import {drawPerson} from './people.js';
@@ -15,6 +15,8 @@ import {banner, bump, screen} from '../ui/dom.js';
 /** @type {[number, number][]} */
 const CREW = [[-.17, -.03], [-.13, .05], [.15, -.03], [.19, .05], [.01, .08]];
 const CREW_COLORS = ['#A0522D', '#8A6B3F', '#B5533C', '#C1694F', '#9C7A4A'];
+const MAMMOTH_BUZZ = [80, 1000, 80, 1000, 80, 1000, 80];
+const TIGER_BUZZ = [100, 150, 450, 150, 100, 150, 450, 150, 100, 150, 450];
 /** @type {[number, number, number][]} */
 const STUCK = [[-14, -16, -.6], [4, -22, .2], [16, -12, .7], [-4, -8, -.3], [10, -4, .5], [-18, -2, -.8], [0, -18, 0], [20, -20, .9], [-10, -24, -.4], [8, -10, .3]];
 
@@ -36,6 +38,18 @@ export function catchMammoth() {
   tune([392, 523, 659], 80);
   buzz([20, 40, 20]);
   bump();
+}
+
+function mammothComes() {
+  mammoth = {xf: -.15, lane: .86, fleeing: false, step: 0};
+  trumpet();
+  morse(MAMMOTH_BUZZ);
+}
+
+function tigerComes() {
+  tiger = {xf: 1.1, lane: .82, hp: 3, fleeing: false, step: 0, shake: 0};
+  roar();
+  morse(TIGER_BUZZ);
 }
 
 /** @param {string} text */
@@ -137,7 +151,7 @@ function huntTick(dt) {
 export function mammothTick(dt) {
   if (!mammoth) {
     mammothIn -= dt;
-    if (mammothIn <= 0 && opened(world, 'mammoth') && Date.now() >= world.state.mammothRest) mammoth = {xf: -.15, lane: .86, fleeing: false, step: 0};
+    if (mammothIn <= 0 && opened(world, 'mammoth') && Date.now() >= world.state.mammothRest) mammothComes();
   } else if (mammoth.caught) huntTick(dt);
   else {
     mammoth.xf += (mammoth.fleeing ? .45 : .07) * dt;
@@ -154,7 +168,7 @@ export function tigerTick(dt) {
   if (!tiger) {
     if (!document.hidden && world.night > .6 && world.heat < 25 && world.state.earned > 10000 && opened(world, 'tiger') && !boostOn(world, 'ward')) {
       tigerIn -= dt * (isScared(world) ? .5 : 1);
-      if (tigerIn <= 0) tiger = {xf: 1.1, lane: .82, hp: 3, fleeing: false, step: 0, shake: 0};
+      if (tigerIn <= 0) tigerComes();
     }
   } else if (!document.hidden) {
     tiger.shake = Math.max(0, tiger.shake - dt);
@@ -260,12 +274,8 @@ export const BOOST_USE = {
   ward: () => {
     if (tiger && !tiger.fleeing) scare('Шаман прогнал тигра!');
   },
-  lure: () => {
-    tiger = {xf: 1.1, lane: .82, hp: 3, fleeing: false, step: 0, shake: 0};
-  },
-  call: () => {
-    mammoth = {xf: -.15, lane: .86, fleeing: false, step: 0};
-  },
+  lure: tigerComes,
+  call: mammothComes,
 };
 
 /** @param {number} [mammothDelay] */

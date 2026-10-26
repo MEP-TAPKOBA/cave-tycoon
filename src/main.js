@@ -3,11 +3,11 @@ import {cooled} from './core/economy.js';
 import {stageCount} from './core/quests.js';
 import {TUT_DONE} from './core/state.js';
 import {serverSaves, tg, tgAt} from './platform/telegram.js';
-import {beep, buzz, sound, world} from './game.js';
+import {beep, sound, world} from './game.js';
 import {canvas, H, W} from './scene/view.js';
 import {syncWalkers} from './scene/people.js';
 import {beastsBack} from './scene/beasts.js';
-import {draw, hunt, tap, update} from './scene/scene.js';
+import {draw, hunt, release, tap, update} from './scene/scene.js';
 import {$, banner, openSec, openSheet, screen} from './ui/dom.js';
 import {build, renderLists, stageBtn} from './ui/lists.js';
 import {lesson, renderTutorial, resetTutorial} from './ui/tutorial.js';
@@ -15,10 +15,12 @@ import {gift, pull, pullCloud, pullServer, save, saveNow, starShop, welcomeBack}
 import {askMigrate, askRestart, claimStage} from './ui/progress.js';
 import {renderExtras} from './ui/shop.js';
 import {toggleHidden, toggleRating} from './ui/rating.js';
+import {renderSettings} from './ui/settings.js';
 
 function renderList() {
   renderLists();
   renderExtras();
+  renderSettings();
   renderTutorial();
 }
 screen.render = renderList;
@@ -35,15 +37,8 @@ canvas.addEventListener('pointerdown', e => {
   const r = canvas.getBoundingClientRect();
   tap(e.clientX - r.left, e.clientY - r.top);
 });
+for (const type of ['pointerup', 'pointercancel', 'pointerleave']) canvas.addEventListener(type, release);
 $('hunt').onclick = () => hunt(W * (.4 + Math.random() * .3), H * (.8 + Math.random() * .1));
-$('mute').onclick = () => {
-  world.state.muted = !world.state.muted;
-  renderList();
-};
-$('music').onclick = () => {
-  world.state.music = !world.state.music;
-  renderList();
-};
 for (const el of /** @type {NodeListOf<HTMLElement>} */ (document.querySelectorAll('#nav button'))) {
   el.onclick = () => {
     openSheet(openSec === el.dataset.sec ? '' : el.dataset.sec);
@@ -52,6 +47,7 @@ for (const el of /** @type {NodeListOf<HTMLElement>} */ (document.querySelectorA
 }
 $('close').onclick = () => openSheet('');
 $('shells').onclick = () => openSheet(openSec === 'shop' ? '' : 'shop');
+$('gear').onclick = () => openSheet(openSec === 'settings' ? '' : 'settings');
 $('rank').hidden = !serverSaves;
 $('hud').classList.toggle('ranked', serverSaves);
 $('rank').onclick = toggleRating;
@@ -65,12 +61,6 @@ $('coachOk').onclick = () => {
 $('coachSkip').onclick = () => {
   world.state.tut = TUT_DONE;
   world.state.noTut = true;
-  renderList();
-};
-$('buzz').hidden = !tgAt('6.1') && !('vibrate' in navigator);
-$('buzz').onclick = () => {
-  world.state.noBuzz = !world.state.noBuzz;
-  buzz(15);
   renderList();
 };
 $('tutAgain').onclick = () => {

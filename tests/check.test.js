@@ -57,11 +57,31 @@ test('подписка не длиннее, чем записано на сер�
 });
 
 test('скачок земель и добычи быстрее времени отклоняется', () => {
-  const prev = fresh(NOW);
-  assert.equal(judge({...prev, valley: 1, life: {...prev.life, migrations: 1}}, prev, 20e3, NONE, NOW).verdict, 'ok');
-  assert.equal(judge({...prev, valley: 9}, prev, 20e3, NONE, NOW).verdict, 'reject');
-  assert.equal(judge({...prev, valley: 9}, prev, 3600e3, NONE, NOW).verdict, 'ok');
+  const prev = {...fresh(NOW), stage: 4};
+  assert.equal(judge({...prev, valley: 1, stage: 0, life: {...prev.life, migrations: 1}}, prev, 20e3, NONE, NOW).verdict, 'ok');
+  assert.equal(judge({...prev, valley: 9, stage: 0}, prev, 20e3, NONE, NOW).verdict, 'reject');
+  assert.equal(judge({...prev, valley: 2, stage: 0}, prev, 3600e3, NONE, NOW).verdict, 'reject');
   assert.equal(judge({...prev, earned: 1e12, life: {...prev.life, earned: 1e12}}, prev, 20e3, NONE, NOW).verdict, 'reject');
+});
+
+test('переселение без пройденных вех отклоняется, сколько ни жди', () => {
+  const prev = {...fresh(NOW), stage: 3};
+  assert.equal(judge({...prev, valley: 1, stage: 0, life: {...prev.life, migrations: 1}}, prev, 3600e3, NONE, NOW).verdict, 'reject');
+  assert.equal(judge({...fresh(NOW), valley: 1, life: {...fresh(NOW).life, migrations: 1}}, fresh(NOW), 3600e3, NONE, NOW).verdict, 'reject');
+});
+
+test('веха засчитывается, только если её задания выполнены', () => {
+  const prev = fresh(NOW);
+  assert.equal(judge({...prev, stage: 1}, prev, 20e3, NONE, NOW).verdict, 'reject');
+  const done = {...prev, stage: 1, taps: 20, peakHeat: 50, levels: {fire: 2}, earned: 500, life: {...prev.life, earned: 500}};
+  assert.equal(judge(done, prev, 20e3, NONE, NOW).verdict, 'ok');
+  assert.equal(judge({...done, stage: 99}, prev, 3600e3, NONE, NOW).verdict, 'reject');
+});
+
+test('повышенные рабочие не ломают уже пройденную веху', () => {
+  const prev = {...fresh(NOW), stage: 1, taps: 20, peakHeat: 50, levels: {fire: 2}, earned: 3000, life: {...fresh(NOW).life, earned: 3000}};
+  const next = {...prev, stage: 2, levels: {fire: 2, storage: 1, hunter: 0, tracker: 2}, earned: 5000, life: {...prev.life, earned: 5000}};
+  assert.equal(judge(next, prev, 20e3, NONE, NOW).verdict, 'ok');
 });
 
 test('переселение и сброс не считаются подделкой', () => {
@@ -92,4 +112,5 @@ test('битые числа отклоняются', () => {
 
 test('подарок шамана считается купленными ракушками', () => {
   assert.equal(ledgerOf([{item: 'gift:50', count: 1}, {item: 'gift:7', count: 2}], 0).bought, 64);
+  assert.equal(ledgerOf([{item: 'bless:7', count: 2}, {item: 'bless', count: 1}], 0).blessDays, 44);
 });

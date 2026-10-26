@@ -160,7 +160,7 @@ const say = (chat, text) => hook({message: {from: {id: chat, first_name: 'Ден
 
 test('подарок ракушек командой /gift: игрок получает при входе, защита его учитывает', async () => {
   const r = await say(7, `/gift ${USER.id} 50`);
-  assert.match(r.text, /Подарено 50 ракушек игроку #id42/);
+  assert.match(r.text, /Подарено игроку #id42: 50 ракушек/);
   assert.equal(calls.at(-1).body.chat_id, USER.id);
   const claim = await ask('/claim');
   assert.deepEqual(claim.items, ['gift:50']);
@@ -173,6 +173,50 @@ test('/gift: только из чата Дени и с понятными чис
   assert.match((await say(7, '/gift 42')).text, /^Формат/);
   assert.match((await say(7, '/gift 42 -5')).text, /^Формат/);
   assert.match((await say(7, '/gift 42 100000')).text, /^Формат/);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM pays').get().n, 0);
+});
+
+test('подарок подписки /bless: срок продлевается от сегодня или от конца подписки, защита его учитывает', async () => {
+  const r = await say(7, `/bless ${USER.id} 7`);
+  assert.match(r.text, /Подарено игроку #id42: Благословение шамана на 7 дней/);
+  assert.match(calls.at(-1).body.text, /^Шаман благословил тебя на 7 дней: \+25%/);
+  const status = await ask('/claim');
+  assert.deepEqual(status.items, ['bless:7']);
+  assert.ok(Math.abs(status.blessUntil - (Date.now() + 7 * 864e5)) < 5e3);
+  await say(7, `/bless ${USER.id} 3`);
+  const until = (await ask('/status')).blessUntil;
+  assert.ok(Math.abs(until - (Date.now() + 10 * 864e5)) < 5e3);
+  assert.equal((await ask('/save', {save: saveOf({blessUntil: until, shells: 10 * BLESS_GIFT + CEILING})})).ok, true);
+  assert.equal((await ask('/save', {save: saveOf({blessUntil: until, shells: 11 * BLESS_GIFT + CEILING, restarts: 1})})).ok, false);
+});
+
+test('подаренные дни подписки не сгорают при продлении через Telegram', async () => {
+  const DAY = 864e5, now = Date.now(), e1 = Math.floor(now / 1000) + 30 * 86400;
+  /** @param {number} who @param {string} charge @param {number} exp */
+  const renew = (who, charge, exp) => hook({message: {from: {id: who}, chat: {id: who}, successful_payment: {invoice_payload: 'bless', total_amount: 300, telegram_payment_charge_id: charge, subscription_expiration_date: exp, is_recurring: true}}});
+  /** @param {number} who @returns {number} */
+  const until = who => /** @type {any} */ (db.prepare('SELECT bless_until FROM players WHERE id = ?').get(who)).bless_until;
+  await renew(USER.id, 'r1', e1);
+  assert.equal(until(USER.id), e1 * 1000);
+  await renew(USER.id, 'r2', e1 + 30 * 86400);
+  assert.equal(until(USER.id), (e1 + 30 * 86400) * 1000);
+  await say(7, `/bless ${USER.id} 7`);
+  assert.equal(until(USER.id), (e1 + 30 * 86400) * 1000 + 7 * DAY);
+  await renew(USER.id, 'r3', e1 + 60 * 86400);
+  assert.equal(until(USER.id), (e1 + 60 * 86400) * 1000 + 7 * DAY);
+  await renew(USER.id, 'r3', e1 + 60 * 86400);
+  assert.equal(until(USER.id), (e1 + 60 * 86400) * 1000 + 7 * DAY);
+  await say(7, '/bless 43 10');
+  await renew(43, 'r4', e1);
+  assert.ok(Math.abs(until(43) - (e1 * 1000 + 10 * DAY)) < 5e3);
+});
+
+test('/bless: только из чата Дени и с понятными числами', async () => {
+  assert.equal(await say(USER.id, '/bless 42 7'), null);
+  assert.match((await say(7, '/bless 42')).text, /^Формат/);
+  assert.match((await say(7, '/bless 42 0')).text, /^Формат/);
+  assert.match((await say(7, '/bless 42 1000')).text, /^Формат/);
+  assert.match((await say(7, '/bless все 7')).text, /^Формат/);
   assert.equal(db.prepare('SELECT COUNT(*) AS n FROM pays').get().n, 0);
 });
 
@@ -216,6 +260,43 @@ test('рассылка: /send не на черновик и чужие кома�
   assert.equal(calls.length, 0);
 });
 
+test('/gift all: черновик, раздача частями по /send, никому дважды', async () => {
+  const ids = Array.from({length: 50}, (_, i) => 1000 + i);
+  for (const id of [7, ...ids]) db.prepare('INSERT INTO players (id) VALUES (?)').run(id);
+  blocked.add(1003);
+  calls = [];
+  const r = await say(7, '/gift all 20');
+  assert.match(r.text, /^Чтобы раздать подарок, ответь на черновик командой \/send\. За один раз получат 45/);
+  assert.match(calls[0].body.text, /^Подарок всем игрокам \(50\): 20 ракушек\./);
+  const draft = {message_id: 100 + 1, from: {is_bot: true}, text: calls[0].body.text};
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM pays').get().n, 0);
+  calls = [];
+  assert.match((await answer(draft)).text, /^Подарено: 45, сообщение дошло до 44\. Осталось 5/);
+  assert.equal(calls.length, 45);
+  calls = [];
+  assert.match((await answer(draft)).text, /^Подарено: 5, сообщение дошло до 5\.$/);
+  assert.deepEqual(calls.map(c => c.body.chat_id), ids.slice(45));
+  assert.match((await answer(draft)).text, /^Подарено: 0/);
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM pays WHERE item = 'gift:20' AND user_id != 7").get().n, 50);
+});
+
+test('/bless all: повтор после сбоя записи не продлевает подписку дважды', async () => {
+  for (const id of [7, 55, 56]) await say(id, '/start');
+  calls = [];
+  await say(7, '/bless all 5');
+  const draft = {message_id: 100 + 1, from: {is_bot: true}, text: calls[0].body.text};
+  const fresh = kv.get('give:101');
+  assert.match((await answer(draft)).text, /^Подарено: 2, сообщение дошло до 2\.$/);
+  const until = () => /** @type {any} */ (db.prepare('SELECT bless_until FROM players WHERE id = 55').get()).bless_until;
+  const first = until();
+  assert.ok(Math.abs(first - (Date.now() + 5 * 864e5)) < 5e3);
+  kv.set('give:101', fresh);
+  await answer(draft);
+  assert.equal(until(), first);
+  assert.equal(/** @type {any} */ (db.prepare('SELECT bless_until FROM players WHERE id = 7').get()).bless_until, 0);
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM pays WHERE item = 'bless:5'").get().n, 2);
+});
+
 /** @param {{id:number,first_name:string,photo_url?:string}} user @param {Partial<import('../src/core/state.js').State>} patch @returns {Promise<any>} */
 const saveAs = (user, patch) => worker.fetch(new Request('https://w.test/save', {method: 'POST', body: JSON.stringify({initData: initData(user), save: saveOf(patch)})}), env).then(r => r.json());
 
@@ -242,7 +323,7 @@ test('рейтинг: очки из сейва, порядок, кто рань�
 test('рейтинг: свежий сейв в запросе /top сразу даёт актуальные очки и место', async () => {
   await saveAs({id: 1, first_name: 'Аня'}, {valley: 0, stage: 1});
   await saveAs(USER, {valley: 0, stage: 0});
-  const r = await ask('/top', {save: saveOf({valley: 0, stage: 2})});
+  const r = await ask('/top', {save: saveOf({valley: 0, stage: 2, taps: 20, peakHeat: 50, earned: 3000, levels: {fire: 2, hunter: 2, storage: 1}})});
   assert.equal(r.score, 2);
   assert.equal(r.place, 1);
   assert.deepEqual(r.top.map((/** @type {any} */ p) => [p.name, p.score]), [['Вождь', 2], ['Аня', 1]]);

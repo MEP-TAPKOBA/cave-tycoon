@@ -1,4 +1,4 @@
-import {AWAY_COOL, BLESS_GIFT, BLESS_OFFLINE_CAP, HARVEST, KEEPER_HEAT, MAMMOTH_REST, MAX_SHELL_REWARD, OFFLINE_CAP, OFFLINE_SHARE} from '../config.js';
+import {AWAY_COOL, BLESS_GIFT, BLESS_OFFLINE_CAP, DOUSE_RATE, HARVEST, KEEPER_HEAT, MAMMOTH_REST, MAX_SHELL_REWARD, OFFLINE_CAP, OFFLINE_SHARE} from '../config.js';
 import {up} from '../format.js';
 import {ACHS} from '../data/achs.js';
 import {STAR_ITEMS} from '../data/shop.js';
@@ -137,7 +137,14 @@ export function stokeHeat(w) {
 /** @param {World} w @param {number} dt @param {number} night @returns {number} */
 export function heatTick(w, dt, night) {
   const heat = boostOn(w, 'feast') ? 100 : Math.max(0, w.heat - dt * (1 + night * 1.5) / 5 * (has(w, 'flint') ? .5 : 1));
-  return perkOn(w, 'keeper') && !w.state.keeperOff && night < .5 ? Math.max(heat, KEEPER_HEAT) : heat;
+  return perkOn(w, 'keeper') && !w.state.keeperOff ? Math.max(heat, KEEPER_HEAT) : heat;
+}
+
+/** @param {World} w @param {number} dt @returns {number} */
+export function doused(w, dt) {
+  if (boostOn(w, 'feast')) return w.heat;
+  w.state.keeperOff = true;
+  return Math.max(0, w.heat - dt * DOUSE_RATE);
 }
 
 /** @param {World} w @param {number} from @param {number} ms @returns {number} */
@@ -207,8 +214,10 @@ export function blessGift(w) {
 
 /** @param {string} id @returns {StarItem|undefined} */
 export function starItem(id) {
-  const gift = /^gift:(\d+)$/.exec(id);
-  return gift ? {id, name: 'Подарок шамана', icon: '1f41a', desc: '', stars: 0, shells: Number(gift[1])} : STAR_ITEMS.find(i => i.id === id);
+  const gift = /^gift:(\d+)$/.exec(id), bless = /^bless:(\d+)$/.exec(id);
+  if (gift) return {id, name: 'Подарок шамана', icon: '1f41a', desc: '', stars: 0, shells: Number(gift[1])};
+  if (bless) return {id, name: 'Благословение шамана', icon: '1f9d9', desc: '', stars: 0, days: Number(bless[1])};
+  return STAR_ITEMS.find(i => i.id === id);
 }
 
 /** @param {World} w @param {string} id @returns {StarItem|undefined} */

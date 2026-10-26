@@ -2,7 +2,7 @@ import {VALLEYS} from './data/valleys.js';
 import {addMeat} from './core/economy.js';
 import {load} from './platform/saves.js';
 import {createSound} from './platform/sound.js';
-import {buzzer} from './platform/telegram.js';
+import {buzzer, rhythm} from './platform/telegram.js';
 
 /** @typedef {import('./core/state.js').State} State */
 
@@ -12,9 +12,10 @@ import {buzzer} from './platform/telegram.js';
 export const world = {state: load(), heat: 0, night: 0, fed: 1, get now() { return Date.now(); }};
 
 export const buzz = buzzer(world);
+export const morse = rhythm(world);
 
 export const sound = createSound(world);
-export const {beep, tune} = sound;
+export const {beep, tune, trumpet, roar, sizzle} = sound;
 
 /** @param {string} code @returns {string} */
 export const icon = code => `assets/twemoji/${code}.svg`;

@@ -21,21 +21,15 @@ function buyBoost(b) {
   screen.render();
 }
 
-function toggleKeeper() {
-  world.state.keeperOff = !world.state.keeperOff;
-  banner(world.state.keeperOff ? 'Хранитель огня отдыхает' : 'Хранитель огня снова у костра', '1fab5');
-  screen.render();
-}
-
 const SHELL_IMG = `<img src="${icon('1f41a')}" alt="">`;
 const boostRows = BOOSTS.map(b => {
   const el = document.createElement('div');
   el.className = 'item';
-  el.innerHTML = `<div class="ico"><img src="${icon(b.icon)}" alt=""></div><div class="info"><b class="full">${b.name}<span></span></b><small class="full">${b.desc}</small></div><button class="buy"></button>`;
-  const btn = el.querySelector('button'), price = `<span class="price">${SHELL_IMG}${b.price}</span>`;
-  btn.onclick = () => b.id === 'keeper' && perkOn(world, b.id) ? toggleKeeper() : buyBoost(b);
+  el.innerHTML = `<div class="ico"><img src="${icon(b.icon)}" alt=""></div><div class="info"><b class="full">${b.name}<span></span></b><small class="full">${b.desc}</small></div><button class="buy"><span class="price">${SHELL_IMG}${b.price}</span></button>`;
+  const btn = el.querySelector('button');
+  btn.onclick = () => buyBoost(b);
   $('boosts').append(el);
-  return {b, el, btn, price, html: '', left: el.querySelector('span')};
+  return {b, el, btn, left: el.querySelector('span')};
 });
 const STAR_IMG = `<img src="${icon('2b50')}" alt="">`;
 const starRows = STAR_ITEMS.map(it => {
@@ -74,15 +68,10 @@ export function renderExtras() {
   const now = Date.now();
   for (const r of boostRows) {
     r.el.hidden = Boolean(r.b.need) && !opened(world, r.b.need);
-    const owned = Boolean(r.b.once) && perkOn(world, r.b.id), toggle = owned && r.b.id === 'keeper', off = world.state.keeperOff;
-    r.el.classList.toggle('owned', owned && !toggle);
-    setText(r.left, toggle ? (off ? 'выключен' : 'работает') : owned ? 'есть' : boostOn(world, r.b.id) ? `ещё ${clock(world.state.boosts[r.b.id] - now)}` : '');
-    const html = toggle ? (off ? 'Включить' : 'Выключить') : r.price;
-    if (r.html !== html) {
-      r.html = html;
-      r.btn.innerHTML = html;
-    }
-    r.btn.disabled = !toggle && (owned || world.state.shells < r.b.price);
+    const owned = Boolean(r.b.once) && perkOn(world, r.b.id);
+    r.el.classList.toggle('owned', owned);
+    setText(r.left, owned ? 'есть' : boostOn(world, r.b.id) ? `ещё ${clock(world.state.boosts[r.b.id] - now)}` : '');
+    r.btn.disabled = owned || world.state.shells < r.b.price;
   }
   $('starShop').hidden = !shopStars;
   for (const r of starRows) {

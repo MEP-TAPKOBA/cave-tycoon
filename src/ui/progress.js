@@ -7,12 +7,13 @@ import {celebrate, fly} from '../scene/fx.js';
 import {resetScene} from '../scene/scene.js';
 import {$, bump, modal, openSheet, screen} from './dom.js';
 import {resetTutorial} from './tutorial.js';
-import {save, saveNow, starShop} from './session.js';
+import {saveNow, starShop} from './session.js';
 
 export function claimStage() {
   const want = advanceStage(world);
   if (want === null) return;
   const reward = gain(want);
+  saveNow();
   fly(W / 2, H / 2, 20);
   celebrate(`Веха пройдена! +${num(reward)} мяса`);
   bump();
@@ -31,7 +32,7 @@ function migrate() {
     world.state = migrated(world);
     resetScene(world.state.valley === FEATURE_AT.mammoth ? 8 : 25);
     resetTutorial();
-    save();
+    saveNow();
     openSheet('');
     screen.render();
     $('fade').classList.remove('show');

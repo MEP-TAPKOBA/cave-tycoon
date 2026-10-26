@@ -29,3 +29,15 @@ export const buzzer = world => pattern => {
   if (Array.isArray(pattern)) return void tg.HapticFeedback.notificationOccurred(pattern[0] > 40 ? 'warning' : 'success');
   tg.HapticFeedback.impactOccurred(pattern > 20 ? 'heavy' : pattern > 10 ? 'medium' : 'light');
 };
+
+/** @param {World} world @returns {(pattern:number[]) => void} */
+export const rhythm = world => pattern => {
+  if (world.state.noBuzz) return;
+  if (!tgAt('6.1')) return void navigator.vibrate?.(pattern);
+  let at = 0;
+  pattern.forEach((ms, i) => {
+    const taps = ms < 100 ? 1 : ms / 50, kind = ms < 100 || ms > 200 ? 'heavy' : 'medium';
+    if (i % 2 === 0) for (let k = 0; k < taps; k++) setTimeout(() => world.state.noBuzz || tg.HapticFeedback.impactOccurred(kind), at + k * 50);
+    at += ms;
+  });
+};

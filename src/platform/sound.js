@@ -10,7 +10,18 @@ export function createSound(world) {
   let audio;
   /** @type {{bus:GainNode,noise:AudioBuffer,drone:{stop:() => void}|null}|null} */
   let band = null;
+  /** @type {AudioBuffer|undefined} */
+  let noiseBuf;
   let nextStep = 0, stepNo = 0;
+
+  /** @returns {AudioBuffer} */
+  function noise() {
+    if (noiseBuf) return noiseBuf;
+    noiseBuf = audio.createBuffer(1, audio.sampleRate, audio.sampleRate);
+    const nd = noiseBuf.getChannelData(0);
+    for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+    return noiseBuf;
+  }
 
   /** @param {number} freq @param {number} dur @param {OscillatorType} [type] @param {number} [vol] */
   function beep(freq, dur, type = 'square', vol = .05) {
@@ -31,6 +42,96 @@ export function createSound(world) {
   /** @param {number[]} notes @param {number} gap */
   const tune = (notes, gap) => notes.forEach((f, i) => setTimeout(() => beep(f, .14), i * gap));
 
+  function trumpet() {
+    if (world.state.muted) return;
+    try {
+      audio ??= new AudioContext();
+      const at = audio.currentTime, f = audio.createBiquadFilter(), g = audio.createGain(), lfo = audio.createOscillator(), depth = audio.createGain();
+      const horns = [1, 1.012].map(() => audio.createOscillator());
+      lfo.frequency.value = 7;
+      depth.gain.value = 9;
+      lfo.connect(depth);
+      horns.forEach((o, i) => {
+        const k = i ? 1.012 : 1;
+        o.type = 'sawtooth';
+        o.frequency.setValueAtTime(240 * k, at);
+        o.frequency.exponentialRampToValueAtTime(370 * k, at + .18);
+        o.frequency.setValueAtTime(370 * k, at + .75);
+        o.frequency.exponentialRampToValueAtTime(290 * k, at + 1.15);
+        depth.connect(o.frequency);
+        o.connect(f);
+      });
+      f.type = 'lowpass';
+      f.Q.value = 3;
+      f.frequency.setValueAtTime(700, at);
+      f.frequency.exponentialRampToValueAtTime(1800, at + .2);
+      f.frequency.exponentialRampToValueAtTime(800, at + 1.15);
+      g.gain.setValueAtTime(.0001, at);
+      g.gain.exponentialRampToValueAtTime(.03, at + .1);
+      g.gain.setValueAtTime(.03, at + .8);
+      g.gain.exponentialRampToValueAtTime(.0001, at + 1.2);
+      f.connect(g).connect(audio.destination);
+      for (const o of [...horns, lfo]) {
+        o.start(at);
+        o.stop(at + 1.25);
+      }
+    } catch {}
+  }
+
+  function sizzle(len = .9) {
+    if (world.state.muted) return;
+    try {
+      audio ??= new AudioContext();
+      const at = audio.currentTime, s = audio.createBufferSource(), f = audio.createBiquadFilter(), g = audio.createGain();
+      s.buffer = noise();
+      s.loop = true;
+      f.type = 'highpass';
+      f.frequency.setValueAtTime(1800, at);
+      f.frequency.exponentialRampToValueAtTime(4500, at + len);
+      g.gain.setValueAtTime(.0001, at);
+      g.gain.exponentialRampToValueAtTime(.04, at + .05);
+      g.gain.exponentialRampToValueAtTime(.0001, at + len);
+      s.connect(f).connect(g).connect(audio.destination);
+      s.start(at);
+      s.stop(at + len + .02);
+    } catch {}
+  }
+
+  function roar() {
+    if (world.state.muted) return;
+    try {
+      audio ??= new AudioContext();
+      const at = audio.currentTime, o = audio.createOscillator(), growl = audio.createOscillator(), depth = audio.createGain(), am = audio.createGain(), g = audio.createGain();
+      const s = audio.createBufferSource(), f = audio.createBiquadFilter(), ng = audio.createGain();
+      o.type = 'sawtooth';
+      o.frequency.setValueAtTime(95, at);
+      o.frequency.exponentialRampToValueAtTime(130, at + .25);
+      o.frequency.exponentialRampToValueAtTime(65, at + 1);
+      growl.frequency.value = 28;
+      depth.gain.value = .4;
+      am.gain.value = .6;
+      growl.connect(depth).connect(am.gain);
+      g.gain.setValueAtTime(.0001, at);
+      g.gain.exponentialRampToValueAtTime(.06, at + .12);
+      g.gain.setValueAtTime(.06, at + .55);
+      g.gain.exponentialRampToValueAtTime(.0001, at + 1.05);
+      s.buffer = noise();
+      f.type = 'bandpass';
+      f.frequency.setValueAtTime(500, at);
+      f.frequency.exponentialRampToValueAtTime(260, at + 1);
+      f.Q.value = 1.5;
+      ng.gain.setValueAtTime(.0001, at);
+      ng.gain.exponentialRampToValueAtTime(.05, at + .1);
+      ng.gain.exponentialRampToValueAtTime(.0001, at + 1);
+      o.connect(am).connect(g).connect(audio.destination);
+      s.connect(f).connect(ng).connect(audio.destination);
+      for (const n of [o, growl, s]) {
+        n.start(at);
+        n.stop(at + 1.1);
+      }
+    } catch {}
+  }
+
   /** @returns {{bus:GainNode,noise:AudioBuffer,drone:null}} */
   function setupBand() {
     const bus = audio.createGain(), verb = audio.createConvolver(), wet = audio.createGain();
@@ -44,9 +145,7 @@ export function createSound(world) {
     wet.gain.value = .35;
     bus.connect(audio.destination);
     bus.connect(verb).connect(wet).connect(audio.destination);
-    const noise = audio.createBuffer(1, audio.sampleRate, audio.sampleRate), nd = noise.getChannelData(0);
-    for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
-    return {bus, noise, drone: null};
+    return {bus, noise: noise(), drone: null};
   }
 
   /** @param {AudioNode} node @param {number} pan */
@@ -214,6 +313,9 @@ export function createSound(world) {
   return {
     beep,
     tune,
+    trumpet,
+    roar,
+    sizzle,
     resume: () => void audio?.resume(),
     suspend: () => void audio?.suspend(),
   };

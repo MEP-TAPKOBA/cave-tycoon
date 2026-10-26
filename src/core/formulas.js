@@ -40,11 +40,11 @@ export const cap = w => Math.floor(2500 * 1.267 ** lvl(w, 'storage'));
 /** @param {World} w @returns {number} */
 export const staff = w => WORKERS.reduce((sum, d) => sum + lvl(w, d.id), 0);
 /** @param {World} w @returns {number} */
-export const speed = w => (1 + up(5 / 3 * lvl(w, 'bath')) / 100) * (has(w, 'drums') ? 1.07 : 1) * (boostOn(w, 'speed') ? 2 : 1);
+export const speed = w => (1 + up(4 / 3 * lvl(w, 'bath')) / 100) * (has(w, 'drums') ? 1.07 : 1) * (boostOn(w, 'speed') ? 2 : 1);
 /** @param {World} w @returns {number} */
 export const hype = w => boostOn(w, 'hunt') ? 2 : 1;
 /** @param {World} w @returns {number} */
-export const cook = w => 1 + up(10 / 3 * lvl(w, 'kitchen') * (has(w, 'salt') ? 7 / 6 : 1)) / 100;
+export const cook = w => 1 + up(2 * lvl(w, 'kitchen') * (has(w, 'salt') ? 7 / 6 : 1)) / 100;
 /** @param {World} w @returns {boolean} */
 export const isScared = w => w.now < w.state.scaredUntil;
 /** @param {World} w @param {string} id @param {boolean} [scared] @returns {number} */

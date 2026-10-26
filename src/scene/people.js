@@ -258,7 +258,7 @@ const FLIGHT = .5;
 let keeperT = 0, dozeT = 0;
 
 /** @returns {boolean} */
-const keeperAwake = () => !world.state.keeperOff && world.night < .5;
+const keeperAwake = () => !world.state.keeperOff;
 /** @returns {[number, number]} */
 const keeperSpot = () => [spotOf('fire').x - 16 * U, spotOf('fire').y + 22 * U];
 

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {pct} from '../src/format.js';
 import {ALL, FARM, STATIONS, WORKERS} from '../src/data/units.js';
-import {STAT, animalRate, cap, costOf, grainNeed, grainRate, legacy, live, mult, perSec, perTap, rateOf, speed} from '../src/core/formulas.js';
+import {STAT, animalRate, cap, cook, costOf, grainNeed, grainRate, legacy, live, mult, perSec, perTap, rateOf, speed} from '../src/core/formulas.js';
 import {at} from './world.js';
 
 const byId = Object.fromEntries(ALL.map(d => [d.id, d]));
@@ -54,8 +54,21 @@ test('ферма: поле 300/мин, коза ест 180/мин и даёт 24
 });
 
 test('баня и бустер «Быстрые ноги»', () => {
-  assert.equal(speed(at({levels: {bath: 3}})), 1.05);
+  assert.equal(speed(at({levels: {bath: 3}})), 1.04);
+  assert.equal(speed(at({levels: {bath: 25}})), 1.34);
   assert.equal(speed(at({boosts: {speed: Date.now() * 2}})), 2);
+});
+
+test('кухня: 2% за уровень, с солью на 17% сильнее', () => {
+  assert.equal(cook(at({levels: {kitchen: 1}})), 1.02);
+  assert.equal(cook(at({levels: {kitchen: 10}})), 1.2);
+  assert.equal(cook(at({levels: {kitchen: 10}, techs: ['salt']})), 1.24);
+});
+
+test('следопыт и вождь дорожают быстрее охотника', () => {
+  assert.deepEqual(WORKERS.map(d => d.growth), [1.085, 1.1275, 1.12]);
+  assert.equal(costOf(at({levels: {tracker: 10}}), WORKERS[1], 1), 3321);
+  assert.equal(costOf(at({levels: {chief: 25}}), WORKERS[2], 1), 340002);
 });
 
 test('добыча в секунду складывается из рабочих и скотины', () => {
