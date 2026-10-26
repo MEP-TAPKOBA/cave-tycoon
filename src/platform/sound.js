@@ -43,7 +43,7 @@ export function createSound(world) {
   const tune = (notes, gap) => notes.forEach((f, i) => setTimeout(() => beep(f, .14), i * gap));
 
   function trumpet() {
-    if (world.state.muted) return;
+    if (world.state.muted || world.state.noBeasts) return;
     try {
       audio ??= new AudioContext();
       const at = audio.currentTime, f = audio.createBiquadFilter(), g = audio.createGain(), lfo = audio.createOscillator(), depth = audio.createGain();
@@ -98,7 +98,7 @@ export function createSound(world) {
   }
 
   function roar() {
-    if (world.state.muted) return;
+    if (world.state.muted || world.state.noBeasts) return;
     try {
       audio ??= new AudioContext();
       const at = audio.currentTime, o = audio.createOscillator(), growl = audio.createOscillator(), depth = audio.createGain(), am = audio.createGain(), g = audio.createGain();

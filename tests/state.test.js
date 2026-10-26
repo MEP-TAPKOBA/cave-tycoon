@@ -28,6 +28,7 @@ test('сейв econ 2 не пересчитывается и дополняет�
   assert.equal(s.grain, 3);
   assert.equal(s.restarts, 0);
   assert.equal(s.noBuzz, false);
+  assert.equal(s.noBeasts, false);
 });
 
 test('битый сейв - null', () => {

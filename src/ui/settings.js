@@ -1,7 +1,7 @@
 import {KEEPER_HEAT} from '../config.js';
 import {perkOn} from '../core/formulas.js';
 import {tgAt} from '../platform/telegram.js';
-import {beep, buzz, icon, world} from '../game.js';
+import {beep, buzz, icon, trumpet, world} from '../game.js';
 import {$, banner, screen} from './dom.js';
 
 /** @typedef {{name:string,desc:string,icon:string,on:() => boolean,flip:() => void,shown?:() => boolean}} Setting */
@@ -19,6 +19,10 @@ const SETTINGS = [
   {name: 'Звуки', desc: 'охота, постройки и звери', icon: '1f50a', on: () => !world.state.muted, flip: () => {
     world.state.muted = !world.state.muted;
     beep(520, .04, 'sine');
+  }},
+  {name: 'Голоса зверей', desc: 'мамонт трубит, тигр рычит', icon: '1f9a3', on: () => !world.state.noBeasts, flip: () => {
+    world.state.noBeasts = !world.state.noBeasts;
+    trumpet();
   }},
   {name: 'Музыка', desc: 'барабаны и флейта племени', icon: '1f941', on: () => world.state.music, flip: () => {
     world.state.music = !world.state.music;

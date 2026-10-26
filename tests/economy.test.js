@@ -78,7 +78,7 @@ test('ракушки за переселение: 2 + 1 за две земли, 
 });
 
 test('переселение и сброс сохраняют нужное', () => {
-  const w = at({valley: 2, shells: 5, meat: 1e5, perks: ['keeper'], restarts: 1, levels: {fire: 9}, noBuzz: true});
+  const w = at({valley: 2, shells: 5, meat: 1e5, perks: ['keeper'], restarts: 1, levels: {fire: 9}, noBuzz: true, noBeasts: true});
   const next = migrated(w);
   assert.equal(next.valley, 3);
   assert.equal(next.shells, 8);
@@ -87,6 +87,8 @@ test('переселение и сброс сохраняют нужное', () 
   assert.deepEqual(next.perks, ['keeper']);
   assert.equal(next.life.migrations, 1);
   assert.equal(next.noBuzz, true);
+  assert.equal(next.noBeasts, true);
+  assert.equal(restarted(w, false).noBeasts, true);
   const reset = restarted(w, false);
   assert.equal(reset.restarts, 2);
   assert.equal(reset.valley, 0);
