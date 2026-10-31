@@ -36,7 +36,7 @@ export const milestones = def => def.id === 'fire' || Boolean(def.trip) || Boole
 /** @param {World} w @returns {number} */
 export const seats = w => 2 + lvl(w, 'cave');
 /** @param {World} w @returns {number} */
-export const cap = w => Math.floor(2500 * 1.267 ** lvl(w, 'storage'));
+export const cap = w => Math.floor(2500 * STATIONS[2].growth ** lvl(w, 'storage'));
 /** @param {World} w @returns {number} */
 export const staff = w => WORKERS.reduce((sum, d) => sum + lvl(w, d.id), 0);
 /** @param {World} w @returns {number} */

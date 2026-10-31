@@ -16,3 +16,7 @@ export const SAVE_EPOCH = 2;
 export const SERVER = 'https://cave-tycoon.mep-tapkoba.workers.dev';
 export const CLOUD_EVERY = 20e3;
 export const CLOUD_MAX = 4096;
+export const VALLEY_GROW = 1.24;
+export const GOAL_SHARE = 10;
+export const BEAST_GOAL_MAX = 1;
+export const TAP_GOAL_MAX = 6;

@@ -1,3 +1,4 @@
+import {BEAST_GOAL_MAX, GOAL_SHARE, TAP_GOAL_MAX, VALLEY_GROW} from '../config.js';
 import {num} from '../format.js';
 import {CHAPTERS, EXTRAS, GENERIC_STAGES, GOALS} from '../data/chapters.js';
 import {TECHS} from '../data/techs.js';
@@ -6,6 +7,7 @@ import {herd, lvl, staff} from './formulas.js';
 
 /** @typedef {import('./state.js').State} State */
 /** @typedef {import('./state.js').World} World */
+/** @typedef {import('../data/units.js').Def} Def */
 /** @typedef {{text:string,goal:number,now:number}} Quest */
 
 /** @param {World} w @param {string} kind @param {number} goal @returns {Quest} */
@@ -22,17 +24,30 @@ export function questOf(w, kind, goal) {
   return {goal, now: s.tigers, text: `Прогнать тигров: ${goal}`};
 }
 
+/** @param {number} valley @returns {number} */
+export const stageScale = valley => 330 * 2.5 ** Math.min(valley, CHAPTERS.length) * VALLEY_GROW ** Math.max(0, valley - CHAPTERS.length);
+
+/** @param {number} s @param {number} g @returns {number} */
+const earnedGoal = (s, g) => 3000 * 1.5 ** s * VALLEY_GROW ** g;
+
+/** @param {string} id @param {number} budget @returns {number} */
+function levelFor(id, budget) {
+  const def = /** @type {Def} */ (ALL.find(d => d.id === id));
+  return Math.max(0, Math.floor(Math.log(budget * (def.growth - 1) / def.base + 1) / Math.log(def.growth)));
+}
+
 /** @param {string} kind @param {number} s @param {number} g @returns {number} */
 export function genericGoal(kind, s, g) {
   if (GOALS[kind]) {
-    const [from, start, step] = GOALS[kind];
-    return Math.round((start + Math.floor((s - from) * step)) * (1 + g / 2));
+    const [from, start, step] = GOALS[kind], budget = GOAL_SHARE * earnedGoal(s, g);
+    const bought = kind === 'tribe' ? 2 + levelFor('cave', budget) : kind === 'herd' ? 2 * levelFor('barn', budget) : levelFor(kind, budget);
+    return Math.max(start + Math.floor((s - from) * step), bought);
   }
-  if (kind === 'taps') return Math.round(30 * (1 + s / 2) * (1 + g / 2));
-  if (kind === 'earned') return Math.round(3000 * 1.5 ** s * 2.5 ** g);
-  if (kind === 'mammoths') return 1 + Math.floor(s / 5) + g;
+  if (kind === 'taps') return Math.round(30 * (1 + s / 2) * (1 + Math.min(g, TAP_GOAL_MAX) / 2));
+  if (kind === 'earned') return Math.round(earnedGoal(s, g));
+  if (kind === 'mammoths') return 1 + Math.floor(s / 5) + Math.min(g, BEAST_GOAL_MAX);
   if (kind === 'techs') return Math.min(TECHS.length, 1 + Math.floor(s / 4));
-  return 1 + Math.floor(s / 10) + g;
+  return 1 + Math.floor(s / 10) + Math.min(g, BEAST_GOAL_MAX);
 }
 
 /** @param {World} w @returns {number} */

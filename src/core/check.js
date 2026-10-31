@@ -6,7 +6,7 @@ import {TECHS} from '../data/techs.js';
 import {ALL} from '../data/units.js';
 import {achReward, mammothMeat, starItem} from './economy.js';
 import {cap, perSec, perTap, ranked} from './formulas.js';
-import {quests, stageCount} from './quests.js';
+import {quests, stageCount, stageScale} from './quests.js';
 import {fresh} from './state.js';
 
 /** @typedef {import('./state.js').State} State */
@@ -57,7 +57,7 @@ const peak = (s, now) => ({state: {...s, scaredUntil: 0, boosts: {...s.boosts, h
 /** @param {State} base @param {number} ms @param {number} now @returns {number} */
 export function gainLimit(base, ms, now) {
   const w = peak(base, now), rate = perSec(w, false, 1) + perTap(w) * 20 + mammothMeat(w) / 60;
-  return GAIN_SLACK * (rate * (ms / 1000 + 60) + cap(w) + GENERIC_STAGES * Math.max(rate * 20, 330 * GENERIC_STAGES * 2.5 ** (base.valley + 1)));
+  return GAIN_SLACK * (rate * (ms / 1000 + 60) + cap(w) + GENERIC_STAGES * Math.max(rate * 20, GENERIC_STAGES * stageScale(base.valley + 1)));
 }
 
 /** @param {State} next @param {State} base @param {number} ms @param {number} now @returns {boolean} */

@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {BLESS_OFFLINE_CAP, DOUSE_RATE, KEEPER_HEAT, OFFLINE_CAP, OFFLINE_SHARE} from '../src/config.js';
+import {BEAST_GOAL_MAX, BLESS_OFFLINE_CAP, DOUSE_RATE, GOAL_SHARE, KEEPER_HEAT, OFFLINE_CAP, OFFLINE_SHARE} from '../src/config.js';
 import {up} from '../src/format.js';
 import {BOOSTS} from '../src/data/shop.js';
-import {WORKERS} from '../src/data/units.js';
+import {GENERIC_STAGES} from '../src/data/chapters.js';
+import {STATIONS, WORKERS} from '../src/data/units.js';
 import {addMeat, claimAch, cooled, doused, grant, heatTick, migrated, offline, purchase, purchaseBoost, restarted, shellReward} from '../src/core/economy.js';
-import {perSec} from '../src/core/formulas.js';
-import {rankScore} from '../src/core/quests.js';
+import {costOf, perSec} from '../src/core/formulas.js';
+import {genericGoal, rankScore} from '../src/core/quests.js';
 import {NOW, at} from './world.js';
 
 const HOUR = 3600e3;
@@ -156,4 +157,16 @@ test('Хранитель огня выключается и не держит ж
   assert.equal(heatTick(on, 1, 0), KEEPER_HEAT);
   assert.equal(heatTick(off, 1, 0), 0);
   assert.equal(migrated(off).keeperOff, true);
+});
+
+test(`дальние земли: уровень в задании по карману, мамонтов и тигров не больше +${BEAST_GOAL_MAX}`, () => {
+  for (const g of [0, 10, 50, 100]) {
+    const s = GENERIC_STAGES - 1, budget = GOAL_SHARE * genericGoal('earned', s, g);
+    for (const def of STATIONS) {
+      const goal = genericGoal(def.id, s, g);
+      if (goal > 25) assert.ok(costOf(at(), def, goal) <= budget * 1.0001, `${def.id} в земле +${g}`);
+    }
+    assert.ok(genericGoal('mammoths', s, g) <= 1 + Math.floor(s / 5) + BEAST_GOAL_MAX);
+    assert.ok(genericGoal('tigers', s, g) <= 1 + Math.floor(s / 10) + BEAST_GOAL_MAX);
+  }
 });

@@ -4,7 +4,7 @@ import {ACHS} from '../data/achs.js';
 import {STAR_ITEMS} from '../data/shop.js';
 import {WORKERS} from '../data/units.js';
 import {blessed, boostOn, cap, costOf, grainCap, grainNeed, grainRate, harvestSize, has, herd, isScared, legacy, lvl, pens, perkOn, perSec, perTap, seats, staff, steadyFed, unlocked} from './formulas.js';
-import {quests} from './quests.js';
+import {quests, stageScale} from './quests.js';
 import {TUT_DONE, fresh} from './state.js';
 
 /** @typedef {import('./state.js').State} State */
@@ -178,7 +178,7 @@ export function offline(w, since) {
 export function advanceStage(w) {
   if (!quests(w).every(q => q.now >= q.goal)) return null;
   w.state.stage++;
-  return up(Math.max(perSec(w) * 20, 330 * w.state.stage * 2.5 ** w.state.valley));
+  return up(Math.max(perSec(w) * 20, w.state.stage * stageScale(w.state.valley)));
 }
 
 /** @param {World} w @returns {number} */
