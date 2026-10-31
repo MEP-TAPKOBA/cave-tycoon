@@ -2,7 +2,7 @@ import {BLESS_BOOST, BLESS_GIFT, SAVE_EPOCH} from '../src/config.js';
 import {pct, plural} from '../src/format.js';
 import {STAR_ITEMS} from '../src/data/shop.js';
 import {judge, ledgerOf} from '../src/core/check.js';
-import {rankScore} from '../src/core/quests.js';
+import {rankScore, stagesDone} from '../src/core/quests.js';
 import {ahead, parseSave} from '../src/core/state.js';
 
 /** @typedef {import('../src/data/shop.js').StarItem} StarItem */
@@ -10,6 +10,7 @@ import {ahead, parseSave} from '../src/core/state.js';
 /** @typedef {{id:number,first_name?:string,last_name?:string,username?:string,photo_url?:string}} User */
 /** @typedef {{TOKEN:string,HOOK:string,GAME:string,ADMIN?:string,KV?:any,DB:any}} Env */
 /** @typedef {{item:string,days:number,what:string,text:string}} Present */
+/** @typedef {{lands:number,stages:number}} Progress */
 
 const DAY = 24 * 3600;
 const INIT_TTL = 24 * 3600;
@@ -268,12 +269,18 @@ async function ledger(env, id) {
   return ledgerOf(results, p?.bless_until || 0);
 }
 
+/** @param {string} data @returns {Progress} */
+function progressOf(data) {
+  const s = parseSave(data);
+  return s ? {lands: s.valley, stages: stagesDone(s)} : {lands: 0, stages: 0};
+}
+
 /** @param {Env} env @param {User} user @returns {Promise<Response>} */
 async function top(env, user) {
-  const {results} = await env.DB.prepare('SELECT id, first, photo, score FROM saves WHERE hidden = 0 ORDER BY score DESC, score_at, id LIMIT ?').bind(TOP).all();
-  const me = await env.DB.prepare('SELECT score, score_at, hidden FROM saves WHERE id = ?').bind(user.id).first();
+  const {results} = await env.DB.prepare('SELECT id, first, photo, score, data FROM saves WHERE hidden = 0 ORDER BY score DESC, score_at, id LIMIT ?').bind(TOP).all();
+  const me = await env.DB.prepare('SELECT score, score_at, hidden, data FROM saves WHERE id = ?').bind(user.id).first();
   const ahead = me && !me.hidden ? await env.DB.prepare('SELECT COUNT(*) AS n FROM saves WHERE hidden = 0 AND (score > ? OR (score = ? AND (score_at < ? OR (score_at = ? AND id < ?))))').bind(me.score, me.score, me.score_at, me.score_at, user.id).first() : null;
-  return Response.json({top: results.map((/** @type {{id:number,first:string,photo:string,score:number}} */ r) => ({name: r.first || 'Вождь', photo: r.photo, score: r.score, me: r.id === user.id})), place: ahead ? ahead.n + 1 : 0, score: me?.score ?? 0, hidden: Boolean(me?.hidden)});
+  return Response.json({top: results.map((/** @type {{id:number,first:string,photo:string,score:number,data:string}} */ r) => ({name: r.first || 'Вождь', photo: r.photo, score: r.score, me: r.id === user.id, ...progressOf(r.data)})), place: ahead ? ahead.n + 1 : 0, score: me?.score ?? 0, hidden: Boolean(me?.hidden), ...(me ? progressOf(me.data) : {lands: 0, stages: 0})});
 }
 
 /** @param {Env} env @param {User} user @param {unknown} text @returns {Promise<Response>} */

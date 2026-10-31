@@ -345,6 +345,7 @@ test('рейтинг: очки из сейва, порядок, кто рань�
   assert.equal(r.top[1].photo, '');
   assert.equal(r.place, 3);
   assert.equal(r.top[0].id, undefined);
+  assert.deepEqual([r.top[0].lands, r.top[0].stages, r.lands, r.stages], [0, 3, 0, 2]);
   await saveAs({id: 1, first_name: 'Аня'}, {valley: 0, stage: 3, taps: 5});
   assert.equal((await ask('/top')).top[0].name, 'Аня');
   await saveAs(USER, {valley: 0, stage: 2, noRank: true});
@@ -363,6 +364,13 @@ test('рейтинг: свежий сейв в запросе /top сразу д
   assert.deepEqual(r.top.map((/** @type {any} */ p) => [p.name, p.score]), [['Вождь', 2], ['Аня', 1]]);
   const forged = await ask('/top', {save: saveOf({valley: 50, stage: 0})});
   assert.equal(forged.score, 2);
+});
+
+test('рейтинг: сколько земель пройдено и вех выполнено за все земли', async () => {
+  await saveAs({id: 5, first_name: 'Гена'}, {valley: 2, stage: 1});
+  const r = await ask('/top');
+  const gena = r.top.find((/** @type {any} */ p) => p.name === 'Гена');
+  assert.deepEqual([gena.lands, gena.stages, gena.score], [2, 4 + 5 + 1, 4 + 5 + 1 + 4]);
 });
 
 test('после оплаты Дене приходит сообщение о покупке', async () => {

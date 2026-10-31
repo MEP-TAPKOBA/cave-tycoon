@@ -54,11 +54,14 @@ export function genericGoal(kind, s, g) {
 export const stageCount = w => CHAPTERS[w.state.valley]?.stages.length ?? GENERIC_STAGES;
 
 /** @param {State} s @returns {number} */
-export function rankScore(s) {
-  let n = s.stage + 2 * s.valley;
+export function stagesDone(s) {
+  let n = s.stage;
   for (let v = 0; v < s.valley; v++) n += CHAPTERS[v]?.stages.length ?? GENERIC_STAGES;
   return n;
 }
+
+/** @param {State} s @returns {number} */
+export const rankScore = s => stagesDone(s) + 2 * s.valley;
 
 /** @param {World} w @returns {Quest[]} */
 export function quests(w) {

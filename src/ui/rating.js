@@ -4,8 +4,8 @@ import {world} from '../game.js';
 import {$, openSec, openSheet, setText} from './dom.js';
 import {saveNow} from './session.js';
 
-/** @typedef {{name:string,photo:string,score:number,me:boolean}} Leader */
-/** @typedef {{top:Leader[],place:number,score:number,hidden:boolean}} Board */
+/** @typedef {{name:string,photo:string,score:number,me:boolean,lands:number,stages:number}} Leader */
+/** @typedef {{top:Leader[],place:number,score:number,hidden:boolean,lands:number,stages:number}} Board */
 
 const COLORS = ['#C1694F', '#77B255', '#55ACEE', '#AA8DD8', '#F4900C', '#DD2E44'];
 const RULES = '1 очко за веху, 2 за переселение';
@@ -20,11 +20,13 @@ const colorOf = name => COLORS[[...name].reduce((sum, ch) => sum + ch.charCodeAt
 function row(p, place) {
   const el = document.createElement('div');
   el.className = 'place' + (p.me ? ' me' : '');
-  const pos = document.createElement('b'), who = document.createElement('span'), pts = document.createElement('b');
+  const pos = document.createElement('b'), who = document.createElement('div'), name = document.createElement('b'), done = document.createElement('small'), pts = document.createElement('b');
   pos.className = 'pos';
   pos.textContent = String(place);
-  who.className = 'who';
-  who.textContent = p.name;
+  who.className = 'who info';
+  name.textContent = p.name;
+  done.textContent = `${plural(p.lands, ['земля', 'земли', 'земель'])}, ${plural(p.stages, ['веха', 'вехи', 'вех'])}`;
+  who.append(name, done);
   pts.className = 'pts';
   pts.textContent = String(p.score);
   /** @type {HTMLElement} */
@@ -58,7 +60,7 @@ function render(board) {
     const gap = document.createElement('div');
     gap.className = 'gap';
     gap.textContent = '...';
-    box.append(gap, row({name: 'Ты', photo: '', score: board.score, me: true}, board.place));
+    box.append(gap, row({name: 'Ты', photo: '', score: board.score, me: true, lands: board.lands, stages: board.stages}, board.place));
   }
   if (!board.top.length) {
     const empty = document.createElement('div');
