@@ -8,6 +8,7 @@ const VOICES = {
   mammoth: {file: 'assets/sounds/mammoth.mp3', gain: .175, lowpass: 3000},
   tiger: {file: 'assets/sounds/tiger.wav', gain: .13, lowpass: 20000},
 };
+const SILENCE = 'data:audio/wav;base64,UklGRmQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YUAAAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA';
 
 /** @param {World} world */
 export function createSound(world) {
@@ -20,6 +21,18 @@ export function createSound(world) {
   let nextStep = 0, stepNo = 0;
   /** @type {Record<string, Promise<AudioBuffer|null>>} */
   const voices = {};
+  const session = /** @type {any} */ (navigator).audioSession;
+  /** @type {HTMLAudioElement|null} */
+  let keep = null;
+
+  const silent = () => world.state.muted && !world.state.music && world.state.noBeasts;
+
+  function loud() {
+    if (session) return void (session.type = silent() ? 'ambient' : 'playback');
+    if (silent()) return void keep?.pause();
+    keep ??= Object.assign(new Audio(SILENCE), {loop: true});
+    keep.play().catch(() => {});
+  }
 
   /** @returns {AudioBuffer} */
   function noise() {
@@ -264,6 +277,7 @@ export function createSound(world) {
   setInterval(musicTick, 50);
   function wake() {
     try {
+      loud();
       audio ??= new AudioContext();
       for (const name in VOICES) load(name);
       if (audio.state === 'running') return;
@@ -282,7 +296,13 @@ export function createSound(world) {
     trumpet: () => void voice('mammoth'),
     roar: () => void voice('tiger'),
     sizzle,
-    resume: () => void audio?.resume(),
-    suspend: () => void audio?.suspend(),
+    resume: () => {
+      loud();
+      audio?.resume();
+    },
+    suspend: () => {
+      keep?.pause();
+      audio?.suspend();
+    },
   };
 }

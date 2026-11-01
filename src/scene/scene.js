@@ -2,7 +2,7 @@ import {num} from '../format.js';
 import {boostOn, cap, lvl, opened, perkOn, perTap} from '../core/formulas.js';
 import {doused, heatTick, stokeHeat, tapped} from '../core/economy.js';
 import {beep, buzz, gain, sizzle, world} from '../game.js';
-import {bubble, CAVE, ctx, FH, glow, H, hits, mix, pill, shade, sign, spotOf, sprite, spriteAt, tag, theme, treeKind, U, W} from './view.js';
+import {bubble, CAVE, ctx, FH, glow, H, hits, mix, pill, prime, shade, sign, spotOf, sprite, spriteAt, tag, theme, treeKind, U, W} from './view.js';
 import {burst, drawFx, floater, fly, fxTick, particles} from './fx.js';
 import {drawWalker, folkDepth, keeperDepth, keeperTick, kidsDepth, kidsTick, moveWalker, walkers, walkerY} from './people.js';
 import {critters, drawFarm, farmTick} from './farm.js';
@@ -289,6 +289,7 @@ function drawStations(t) {
 
 /** @param {number} t */
 export function draw(t) {
+  prime();
   hits.length = 0;
   const th = theme(), day = (Math.sin(t / 30) + 1) / 2, tree = treeKind();
   world.night = 1 - day;

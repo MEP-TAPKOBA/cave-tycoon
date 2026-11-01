@@ -13,9 +13,9 @@ import {NOW, at} from './world.js';
 const HOUR = 3600e3;
 
 test('мясо сверх склада пропадает', () => {
-  const w = at({meat: 2400});
+  const w = at({meat: 6150});
   assert.equal(addMeat(w, 500), 100);
-  assert.equal(w.state.meat, 2500);
+  assert.equal(w.state.meat, 6250);
   assert.equal(w.state.life.earned, 100);
 });
 
@@ -52,7 +52,7 @@ test('доход вне игры: страх режет добычу, склад
   assert.ok(half < full);
   const small = at({levels: {hunter: 2}});
   const r = offline(small, NOW - HOUR);
-  assert.equal(r.earned, 2500);
+  assert.equal(r.earned, 6250);
   assert.ok(r.want > r.earned);
 });
 

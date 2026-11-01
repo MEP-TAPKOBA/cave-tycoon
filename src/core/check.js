@@ -1,6 +1,7 @@
 import {BLESS_GIFT, MAX_SHELL_REWARD} from '../config.js';
 import {up} from '../format.js';
 import {ACHS} from '../data/achs.js';
+import {BOOSTS} from '../data/shop.js';
 import {GENERIC_STAGES} from '../data/chapters.js';
 import {TECHS} from '../data/techs.js';
 import {ALL} from '../data/units.js';
@@ -19,6 +20,10 @@ export const VALLEY_EVERY = 2 * 60e3;
 export const GAIN_SLACK = 20;
 export const SPENT_SLACK = 2;
 const FOREVER = Number.MAX_SAFE_INTEGER;
+const FILL_PRICE = /** @type {import('../data/shop.js').Boost} */ (BOOSTS.find(b => b.id === 'fill')).price;
+
+/** @param {State} s @returns {number} */
+const fills = s => s.life.fills || 0;
 
 /** @param {{item:string,count:number}[]} pays @param {number} blessUntil @returns {Ledger} */
 export function ledgerOf(pays, blessUntil) {
@@ -35,7 +40,7 @@ export function ledgerOf(pays, blessUntil) {
 const amountOk = v => typeof v === 'number' && Number.isFinite(v) && v >= 0;
 
 /** @param {State} s @returns {boolean} */
-export const sane = s => [s.meat, s.earned, s.shells, s.valley, s.stage, s.grain, s.restarts, s.blessUntil, s.life?.earned, s.life?.migrations].every(amountOk) && Object.values(s.levels).every(amountOk) && Array.isArray(s.techs) && Array.isArray(s.perks);
+export const sane = s => [s.meat, s.earned, s.shells, s.valley, s.stage, s.grain, s.restarts, s.blessUntil, s.life?.earned, s.life?.migrations, s.life?.fills ?? 0].every(amountOk) && Object.values(s.levels).every(amountOk) && Array.isArray(s.techs) && Array.isArray(s.perks);
 
 /** @param {State} s @param {Ledger} ledger @returns {number} */
 export function shellCeiling(s, ledger) {
@@ -61,7 +66,13 @@ export function gainLimit(base, ms, now) {
 }
 
 /** @param {State} next @param {State} base @param {number} ms @param {number} now @returns {boolean} */
-export const paceOk = (next, base, ms, now) => next.valley <= base.valley + 1 + ms / VALLEY_EVERY && next.life.earned - base.life.earned <= gainLimit(base, ms, now);
+export const paceOk = (next, base, ms, now) => next.valley <= base.valley + 1 + ms / VALLEY_EVERY && next.life.earned - base.life.earned <= gainLimit(base, ms, now) + Math.max(0, fills(next) - fills(base)) * cap(still(next, now));
+
+/** @param {State} next @param {State} base @param {Ledger} ledger @returns {boolean} */
+export function fillsOk(next, base, ledger) {
+  const extra = fills(next) - fills(base);
+  return extra <= 0 || FILL_PRICE * extra <= Math.max(base.shells, shellCeiling(next, ledger)) - next.shells;
+}
 
 /** @param {State} s @param {number} now @returns {World} */
 const still = (s, now) => ({state: s, heat: 0, fed: 1, now});
@@ -85,7 +96,7 @@ export function judge(next, prev, ms, ledger, now) {
   if (!sane(next)) return {verdict: 'reject', state: next};
   if (prev) {
     const base = prev.restarts === next.restarts ? prev : fresh(now);
-    if (!paceOk(next, base, ms, now) || !progressOk(next, base, now)) return {verdict: 'reject', state: next};
+    if (!fillsOk(next, base, ledger) || !paceOk(next, base, ms, now) || !progressOk(next, base, now)) return {verdict: 'reject', state: next};
     if (!spentOk(next) && spentOk(prev)) return {verdict: 'reject', state: next};
   }
   const ceiling = Math.max(shellCeiling(next, ledger), prev && prev.restarts === next.restarts ? prev.shells : 0);

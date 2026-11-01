@@ -14,8 +14,10 @@ export const FONT = "'Rubik', system-ui, sans-serif";
 export const canvas = /** @type {HTMLCanvasElement} */ ($('canvas'));
 export const ctx = canvas.getContext('2d');
 export let W = 0, H = 0, FH = 0, U = 1;
+let dpr = 1;
 function resize() {
-  const r = canvas.getBoundingClientRect(), dpr = devicePixelRatio || 1;
+  const r = canvas.getBoundingClientRect();
+  dpr = devicePixelRatio || 1;
   W = r.width;
   FH = r.height;
   H = FH * .62;
@@ -34,6 +36,7 @@ function fit() {
   document.documentElement.style.setProperty('--k', String(uiScale));
   resize();
 }
+export const prime = () => ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 new ResizeObserver(resize).observe(canvas);
 addEventListener('resize', fit);
 fit();

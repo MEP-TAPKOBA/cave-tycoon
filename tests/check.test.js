@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {BLESS_GIFT} from '../src/config.js';
+import {BOOSTS} from '../src/data/shop.js';
 import {STATIONS, WORKERS} from '../src/data/units.js';
-import {addMeat, migrated, purchase, restarted} from '../src/core/economy.js';
+import {addMeat, migrated, purchase, purchaseBoost, restarted} from '../src/core/economy.js';
+import {cap} from '../src/core/formulas.js';
 import {SHELL_SLACK, judge, ledgerOf, sane, shellCeiling, spent, spentOk} from '../src/core/check.js';
 import {fresh} from '../src/core/state.js';
 import {NOW, at} from './world.js';
@@ -113,4 +115,24 @@ test('битые числа отклоняются', () => {
 test('подарок шамана считается купленными ракушками', () => {
   assert.equal(ledgerOf([{item: 'gift:50', count: 1}, {item: 'gift:7', count: 2}], 0).bought, 64);
   assert.equal(ledgerOf([{item: 'bless:7', count: 2}, {item: 'bless', count: 1}], 0).blessDays, 44);
+});
+
+test('«Полный склад» за ракушки не откатывается, подделку мяса и нажатий сервер ловит', () => {
+  const fill = /** @type {import('../src/data/shop.js').Boost} */ (BOOSTS.find(b => b.id === 'fill'));
+  const start = () => {
+    const w = at({levels: {storage: 100, hunter: 2}, shells: 40});
+    w.state.meat = cap(w) / 2;
+    w.state.earned = w.state.life.earned = spent(w.state) + w.state.meat;
+    return w;
+  };
+  const w = start(), prev = copy(w.state), later = {...w, now: NOW + 20e3};
+  for (let i = 0; i < 10; i++) {
+    assert.ok(purchaseBoost(later, fill));
+    while (purchase(later, STATIONS[2]));
+  }
+  assert.ok(w.state.life.earned - prev.life.earned > 1000 * cap(start()));
+  assert.equal(w.state.life.fills, 10);
+  assert.equal(judge(w.state, prev, 20e3, NONE, NOW + 20e3).verdict, 'ok');
+  assert.equal(judge({...w.state, life: {...w.state.life, fills: 0}}, prev, 20e3, NONE, NOW + 20e3).verdict, 'reject');
+  assert.equal(judge({...w.state, shells: 40}, prev, 20e3, NONE, NOW + 20e3).verdict, 'reject');
 });

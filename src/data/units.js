@@ -16,7 +16,7 @@ export const WORKERS = [
 /** @type {Def[]} */
 export const FARM = [
   {id: 'field', name: 'Поле пшена', icon: '1f33e', base: 750, growth: 1.15, unit: 'пшена/мин'},
-  {id: 'granary', name: 'Амбар', icon: '1f3e0', base: 1000, growth: 1.15, unit: 'пшена'},
+  {id: 'granary', name: 'Амбар', icon: '1f3e0', base: 1000, growth: 1.1, unit: 'пшена'},
   {id: 'barn', name: 'Хлев', icon: '1f6d6', base: 2000, growth: 1.175, unit: 'мест'},
   {id: 'rabbit', name: 'Кролики', icon: '1f407', base: 600, growth: 1.09, feed: 1.5, meat: 8, unit: 'мяса/с'},
   {id: 'goat', name: 'Козы', icon: '1f410', base: 12500, growth: 1.09, feed: 3, meat: 240, unit: 'мяса/с'},

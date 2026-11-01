@@ -23,10 +23,10 @@ test('цена растёт по growth', () => {
   assert.equal(costOf(w, WORKERS[0], 1), Math.ceil(50 * 1.085 ** 10 - 1e-9));
 });
 
-test('склад: 2500 x рост цены склада в степени уровня', () => {
-  assert.equal(cap(at()), 2500);
-  assert.equal(cap(at({levels: {storage: 1}})), 3062);
-  assert.equal(cap(at({levels: {storage: 10}})), Math.floor(2500 * 1.225 ** 10));
+test('склад: 6250 x рост цены склада в степени уровня', () => {
+  assert.equal(cap(at()), 6250);
+  assert.equal(cap(at({levels: {storage: 1}})), 7656);
+  assert.equal(cap(at({levels: {storage: 10}})), Math.floor(6250 * 1.225 ** 10));
 });
 
 test('охотник, предки, жар, благословение, страх', () => {

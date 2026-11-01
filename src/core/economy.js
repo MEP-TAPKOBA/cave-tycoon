@@ -63,7 +63,10 @@ export function purchaseTech(w, tech) {
 
 /** @type {Record<string, (w:World) => void>} */
 const BOOST_EFFECT = {
-  fill: w => void addMeat(w, Math.max(0, cap(w) - w.state.meat)),
+  fill: w => {
+    w.state.life.fills = (w.state.life.fills || 0) + 1;
+    addMeat(w, Math.max(0, cap(w) - w.state.meat));
+  },
   ward: w => {
     w.state.scaredUntil = 0;
     w.state.injured = {};
