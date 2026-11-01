@@ -73,13 +73,26 @@ export const shade = (s, day) => mix(s[0], s[1], day);
 const SPRITES = {mammoth: '1f9a3', tiger: '1f405', meat: '1f356', fire: '1f525', hut: '1f6d6', rock: '1faa8', wood: '1fab5', pine: '1f332', palm: '1f334', volcano: '1f30b', basket: '1f9fa', skull: '1f480', hotspring: '2668', cloud: '2601', sun: '2600', moon: '1f319', feather: '1fab6', grain: '1f33e', rabbit: '1f407', goat: '1f410', seedling: '1f331'};
 /** @type {Record<string, HTMLCanvasElement>} */
 export const sprites = {};
+/** @type {Record<string, HTMLImageElement>} */
+const images = {};
+
+/** @param {string} name */
+function paint(name) {
+  const c = sprites[name] ?? document.createElement('canvas');
+  c.width = c.height = 144;
+  c.getContext('2d').drawImage(images[name], 0, 0, 144, 144);
+  sprites[name] = c;
+}
+
+const repaint = () => Object.keys(images).forEach(paint);
+setInterval(repaint, 3000);
+document.addEventListener('visibilitychange', () => document.hidden || repaint());
+
 for (const [name, code] of Object.entries(SPRITES)) {
   const img = new Image();
   img.onload = () => {
-    const c = document.createElement('canvas');
-    c.width = c.height = 144;
-    c.getContext('2d').drawImage(img, 0, 0, 144, 144);
-    sprites[name] = c;
+    images[name] = img;
+    paint(name);
   };
   img.src = icon(code);
 }
